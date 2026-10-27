@@ -1,0 +1,24 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('streamhub', {
+  getState: () => ipcRenderer.invoke('state:get'),
+  onState: (callback) => ipcRenderer.on('state', (_event, state) => callback(state)),
+  refresh: () => ipcRenderer.invoke('modules:refresh'),
+  install: (id) => ipcRenderer.invoke('modules:install', id),
+  uninstall: (id) => ipcRenderer.invoke('modules:uninstall', id),
+  saveModuleSettings: (id, values) => ipcRenderer.invoke('modules:settings', id, values),
+  moduleAction: (id, name) => ipcRenderer.invoke('modules:action', id, name),
+  openAccount: () => ipcRenderer.invoke('account:open'),
+  pairAccount: (code) => ipcRenderer.invoke('account:pair', code),
+  disconnectAccount: () => ipcRenderer.invoke('account:disconnect'),
+  connectTwitch: () => ipcRenderer.invoke('twitch:connect'),
+  cancelTwitch: () => ipcRenderer.invoke('twitch:cancel'),
+  disconnectTwitch: () => ipcRenderer.invoke('twitch:disconnect'),
+  openModule: (id) => ipcRenderer.invoke('modules:open', id),
+  openSite: () => ipcRenderer.invoke('site:open'),
+  saveSettings: (patch) => ipcRenderer.invoke('settings:save', patch),
+  saveKeywords: (list) => ipcRenderer.invoke('keywords:save', list),
+  pickFile: () => ipcRenderer.invoke('dialog:file'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+});

@@ -1,0 +1,57 @@
+{
+  "name": "ventoview",
+  "productName": "VentoView",
+  "version": "1.5.0",
+  "description": "VentoView – Overlays für deinen Stream",
+  "author": "VentoView",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "dist": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "gg.ventoview.app",
+    "productName": "VentoView",
+    "files": [
+      "main.js",
+      "preload.js",
+      "core/**",
+      "ui/**",
+      "assets/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LeonardoC98",
+      "repo": "VentoviewApp"
+    },
+    "electronFuses": {
+      "runAsNode": false,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "onlyLoadAppFromAsar": true,
+      "enableEmbeddedAsarIntegrityValidation": true
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "VentoView-Setup-${version}.${ext}"
+    }
+  }
+}

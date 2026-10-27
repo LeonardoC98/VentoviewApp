@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<title>VentoView</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="../assets/icon.png" alt="">
+      <span>VentoView</span>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="modules" aria-selected="true">Module</button>
+      <button type="button" role="tab" data-tab="keywords" aria-selected="false">Keywords</button>
+      <button type="button" role="tab" data-tab="settings" aria-selected="false">Einstellungen</button>
+    </nav>
+    <div class="top-right">
+      <button type="button" class="update-pill" id="updatePill" hidden></button>
+      <div class="service" id="service">
+        <span class="dot"></span>
+        <span id="serviceText">Startet …</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section id="tab-modules">
+      <div class="section-head">
+        <h2>Meine Module</h2>
+      </div>
+      <div class="list" id="installed"></div>
+
+      <div class="section-head">
+        <h2>Module entdecken</h2>
+        <button type="button" class="btn ghost" id="refreshBtn">Aktualisieren</button>
+      </div>
+      <div class="grid" id="available"></div>
+    </section>
+
+    <section id="tab-keywords" hidden>
+      <div class="section-head">
+        <h2>Eigene Keywords</h2>
+      </div>
+      <p class="intro">
+        Eigene Keywords benutzt du im Editor jedes Moduls, z. B. <code>{streamer}</code> in einem Text – sie stehen dort unter
+        „Variablen → VentoView“. Ein Keyword kann ein fester Text sein oder laufend neu gelesen werden: aus einer Datei,
+        einem PowerShell-Befehl oder einer Webadresse. Fest eingebaut sind <code>{zeit}</code>, <code>{datum}</code>,
+        <code>{wochentag}</code> und <code>{laufzeit}</code>.
+      </p>
+      <form class="panel wide" id="keywordsForm">
+        <div class="kw-head"><span>Keyword</span><span>Quelle</span><span>Wert / Ziel</span><span>Alle</span><span>Aktueller Wert</span><span></span></div>
+        <div id="keywordRows"></div>
+        <div class="actions">
+          <button type="button" class="btn ghost" id="addKeyword">+ Keyword</button>
+          <span class="message" id="keywordsMessage" role="status"></span>
+          <button type="submit" class="btn primary">Speichern</button>
+        </div>
+      </form>
+
+      <div class="section-head">
+        <h2>Beispiele zum Übernehmen</h2>
+      </div>
+      <div class="examples" id="keywordExamples"></div>
+
+      <details class="help panel wide">
+        <summary>So bindest du eigene Daten ein</summary>
+        <div class="help-body">
+          <p><strong>Text</strong> – feste Angaben wie dein Name, Discord oder deine PC-Teile. Ändert sich nur, wenn du ihn änderst.</p>
+          <p><strong>Datei</strong> – der Inhalt einer Textdatei. Viele Stream-Tools (Musik-Player, Bots, Spendentools) können Infos
+            in eine .txt-Datei schreiben. VentoView liest sie im eingestellten Abstand und zeigt immer den neuesten Stand.</p>
+          <p><strong>Befehl</strong> – die Ausgabe eines PowerShell-Befehls. Damit kommst du an fast alles, was Windows weiß.
+            Teste den Befehl zuerst in PowerShell: Was dort als Text herauskommt, wird der Wert. Langsame Befehle lieber selten ausführen (30–300 s).</p>
+          <p><strong>Webadresse</strong> – die Antwort einer Adresse, z. B. eines Programms mit eingebautem Webserver oder einer API.
+            Mit dem JSON-Pfad holst du ein einzelnes Feld heraus: <code>data.title</code>, <code>items[0].name</code> –
+            oder du suchst im ganzen Baum: <code>**[Text~Tctl].Value</code> nimmt das erste Objekt, dessen „Text“ „Tctl“ enthält.</p>
+          <p><strong>Beispiel CPU-Temperatur:</strong> Windows liefert sie meist nicht selbst. Installiere das kostenlose
+            <em>LibreHardwareMonitor</em>, starte es (am besten als Administrator) und schalte unter <em>Options → Remote Web Server → Run</em>
+            den Webserver ein. Dann das Beispiel „CPU-Temperatur“ übernehmen. Bei Intel-Prozessoren statt <code>Tctl</code> den Pfad
+            <code>**[Text~CPU Package].Value</code> nehmen.</p>
+          <p><strong>Im Overlay</strong> funktionieren eigene Keywords wie alle anderen – auch in Bedingungen:
+            z. B. eine rote Textebene mit der Bedingung „cputemp größer als 80“.</p>
+          <p class="warn">Befehle laufen mit deinen Rechten auf diesem PC. Trag nur Befehle ein, die du verstehst – niemals welche, die dir jemand im Chat schickt.</p>
+        </div>
+      </details>
+    </section>
+
+    <section id="tab-settings" hidden>
+      <div class="connections">
+        <div class="panel connection" id="accountPanel"></div>
+        <div class="panel connection" id="twitchPanel"></div>
+      </div>
+      <form class="panel" id="settingsForm">
+        <label class="row">
+          <span>
+            <strong>Mit Windows starten</strong>
+            <small id="autostartHint">VentoView startet beim Hochfahren unsichtbar im Tray.</small>
+          </span>
+          <span class="switch"><input type="checkbox" name="autostart"><span></span></span>
+        </label>
+        <label class="row">
+          <span>
+            <strong>Port</strong>
+            <small>Über diesen Port holen sich die Overlays ihre Daten. Nur ändern, wenn er belegt ist.</small>
+          </span>
+          <input type="number" name="port" min="1024" max="65535" required>
+        </label>
+        <label class="row">
+          <span>
+            <strong>Webseite</strong>
+            <small>Von hier kommen die Module. Nur diese Webseite darf Daten abrufen.</small>
+          </span>
+          <input type="url" name="siteUrl" required>
+        </label>
+        <div class="actions">
+          <span class="message" id="settingsMessage" role="status"></span>
+          <button type="submit" class="btn primary">Speichern</button>
+        </div>
+      </form>
+      <div class="panel">
+        <div class="row last">
+          <span>
+            <strong>Updates</strong>
+            <small id="updateText">Wird geprüft …</small>
+          </span>
+          <span class="update-actions">
+            <button type="button" class="btn" id="checkUpdateBtn">Nach Updates suchen</button>
+            <button type="button" class="btn primary" id="installUpdateBtn" hidden>Jetzt installieren</button>
+          </span>
+        </div>
+      </div>
+      <p class="about" id="about"></p>
+    </section>
+  </main>
+
+  <dialog class="modal" id="moduleDialog"></dialog>
+  <div class="toast" id="toast" role="alert" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
