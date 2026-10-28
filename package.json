@@ -1,9 +1,9 @@
 {
   "name": "ventoview",
-  "productName": "VentoView",
-  "version": "1.5.0",
-  "description": "VentoView – Overlays für deinen Stream",
-  "author": "VentoView",
+  "productName": "Ventoview",
+  "version": "1.7.0",
+  "description": "Ventoview – Overlays für deinen Stream",
+  "author": "Ventoview",
   "private": true,
   "main": "main.js",
   "scripts": {
@@ -21,7 +21,7 @@
   },
   "build": {
     "appId": "gg.ventoview.app",
-    "productName": "VentoView",
+    "productName": "Ventoview",
     "files": [
       "main.js",
       "preload.js",
@@ -51,7 +51,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "artifactName": "VentoView-Setup-${version}.${ext}"
+      "artifactName": "Ventoview-Setup-${version}.${ext}"
     }
   }
 }

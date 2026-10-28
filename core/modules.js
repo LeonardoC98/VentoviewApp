@@ -4,7 +4,8 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 
 /**
- * Installiert, startet und entfernt Module.
+ * Lädt, startet und stoppt Module. Alles, was das Konto freischaltet, lädt die App von selbst herunter;
+ * der Nutzer schaltet Module nur aktiv/inaktiv (config.json → inactive).
  * Jedes Modul liegt in <dir>/<id>/ (module.json + index.js) und bekommt
  * einen eigenen Datenordner unter <dataDir>/<id>/, der Updates überlebt.
  */
@@ -26,11 +27,13 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions }) {
     super();
     this.appVersion = appVersion || '0.0.0';
     this.account = account; // Lizenzschein: welche Module freigeschaltet sind
     this.twitch = twitch;   // gemeinsame Twitch-Verbindung für Module
+    this.config = config;
+    this.extensions = extensions; // App-Erweiterungen (.vvext), die manche Module brauchen
     this.dir = dir;
     this.dataDir = dataDir;
     this.siteUrl = siteUrl; // () => string
@@ -71,6 +74,8 @@ class ModuleManager extends EventEmitter {
       onAction: null,
       cleanups: [],
       locked: !this.account?.allows(id),
+      inactive: this.isInactive(id),
+      needsExtension: Boolean(manifest.requires?.extension && !this.extensions?.has(manifest.requires.extension)),
     };
     this.running.set(id, entry);
 
@@ -78,7 +83,15 @@ class ModuleManager extends EventEmitter {
     if (entry.locked) {
       entry.status = this.account?.state().connected
         ? { state: 'warn', text: 'Für dein Konto nicht freigeschaltet' }
-        : { state: 'warn', text: 'Erst mit deinem VentoView-Konto verbinden' };
+        : { state: 'warn', text: 'Erst mit deinem Ventoview-Konto verbinden' };
+      this.bridge.moduleChanged(id);
+      this.emit('change');
+      return;
+    }
+    if (entry.inactive || entry.needsExtension) {
+      entry.status = entry.inactive
+        ? { state: 'idle', text: 'Inaktiv' }
+        : { state: 'warn', text: `Braucht die Erweiterung „${manifest.requires.name || manifest.requires.extension}“` };
       this.bridge.moduleChanged(id);
       this.emit('change');
       return;
@@ -101,9 +114,12 @@ class ModuleManager extends EventEmitter {
       },
       // Test-Knöpfe im Editor und in der App (module.json → "actions")
       onAction: (callback) => { entry.onAction = callback; },
-      // Twitch-Verbindung der App: user, token(), clientId, onChange()
+      // Aktuelle Werte aller Module und eigenen Keywords, z. B. { divsoloduo: 'Gold II', … } – nur lesen
+      values: () => Object.assign({}, ...this.bridge.latest.values()),
+      // Twitch-Verbindung der App: user, scopes, token(), clientId, onChange()
       twitch: this.twitch && {
         get user() { return manager.twitch.user; },
+        get scopes() { return manager.twitch.scopes; },
         token: () => this.twitch.token(),
         invalidate: () => this.twitch.invalidate(),
         clientId: this.twitch.clientId,
@@ -112,6 +128,8 @@ class ModuleManager extends EventEmitter {
           entry.cleanups.push(() => this.twitch.off('change', callback));
         },
       },
+      // Erweiterung, die das Modul in module.json → "requires" angibt (z. B. globale Tastenkürzel)
+      extension: (name) => (manifest.requires?.extension === name ? this.extensions?.get(name) ?? null : null),
       publish: (data) => this.bridge.publish(id, data),
       setStatus: (text, state = 'ok') => {
         if (entry.status.text === text && entry.status.state === state) return;
@@ -150,9 +168,11 @@ class ModuleManager extends EventEmitter {
     const values = {};
     for (const field of entry.manifest.settings || []) {
       const raw = input?.[field.key];
-      if (field.type === 'lines') {
+      if (field.type === 'lines' || field.type === 'hotkeys' || field.type === 'dials') {
         values[field.key] = (Array.isArray(raw) ? raw : String(raw ?? '').split(/\r?\n/))
           .map((line) => String(line).trim()).filter(Boolean).slice(0, 200).map((line) => line.slice(0, 200));
+      } else if (field.type === 'randomizers') {
+        values[field.key] = cleanRandomizers(raw);
       } else if (field.type === 'toggle') {
         values[field.key] = Boolean(raw);
       } else if (field.type === 'number') {
@@ -216,8 +236,8 @@ class ModuleManager extends EventEmitter {
       const registry = await this.fetchRegistry();
       const info = registry?.modules?.find((m) => m.id === id);
       if (!info) throw new Error(this.registryError || 'Modul nicht gefunden.');
-      if (!this.supports(info)) throw new Error(`„${info.name}“ braucht VentoView ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
-      if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem VentoView-Konto (Einstellungen → VentoView-Konto).');
+      if (!this.supports(info)) throw new Error(`„${info.name}“ braucht Ventoview ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
+      if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem Ventoview-Konto (Einstellungen → Ventoview-Konto).');
       if (!this.account.allows(id)) throw new Error(`„${info.name}“ ist für dein Konto nicht freigeschaltet.`);
 
       const res = await fetch(new URL(info.package, this.siteUrl()), { cache: 'no-store', headers: this.account.authHeader() });
@@ -248,6 +268,43 @@ class ModuleManager extends EventEmitter {
     } finally {
       this.busy.delete(id);
       this.emit('change');
+    }
+  }
+
+  isInactive(id) {
+    return (this.config?.get('inactive') || []).includes(id);
+  }
+
+  // Aktiv/inaktiv schalten – inaktive Module bleiben geladen, laufen aber nicht
+  async setActive(id, active) {
+    const list = new Set(this.config.get('inactive') || []);
+    if (active) list.delete(id);
+    else list.add(id);
+    this.config.set({ inactive: [...list] });
+    if (this.running.has(id)) {
+      await this.stop(id);
+      await this.start(id);
+    } else if (active) {
+      await this.install(id);
+    }
+    this.emit('change');
+  }
+
+  // Alles, was das Konto freischaltet, ist automatisch da – fehlende Module still herunterladen
+  async autoInstall() {
+    if (!this.registry || !this.account?.state().connected) return;
+    for (const info of this.registry.modules || []) {
+      if (this.running.has(info.id) || this.busy.has(info.id) || !this.account.allows(info.id) || !this.supports(info)) continue;
+      await this.install(info.id).catch((err) => console.error(`Modul "${info.id}" konnte nicht geladen werden:`, err.message));
+    }
+  }
+
+  // Nach dem Laden oder Entfernen einer Erweiterung die Module neu starten, die sie brauchen
+  async syncExtensions() {
+    for (const [id, entry] of [...this.running.entries()]) {
+      if (!entry.manifest.requires?.extension) continue;
+      await this.stop(id);
+      await this.start(id).catch((err) => console.error(`Modul "${id}" konnte nicht gestartet werden:`, err));
     }
   }
 
@@ -288,11 +345,13 @@ class ModuleManager extends EventEmitter {
 
   list() {
     const available = this.registry?.modules ?? [];
-    const installed = [...this.running.entries()].map(([id, { manifest, status, settings, suggestions, locked }]) => {
+    const installed = [...this.running.entries()].map(([id, { manifest, status, settings, suggestions, locked, inactive, needsExtension }]) => {
       const latest = available.find((m) => m.id === id);
       return {
         ...manifest,
         locked,
+        inactive,
+        needsExtension,
         status,
         settingsValues: settings,
         suggestions,
@@ -308,6 +367,28 @@ class ModuleManager extends EventEmitter {
       registryError: this.registryError,
     };
   }
+}
+
+// Zufallsgeneratoren (z. B. !lucky): Name (für {zufall_name}), Befehl, Abklingzeit, Antwort-Art, Antworttext
+// mit {treffer} und Einträge mit Gewicht (Chance relativ zu den anderen; 0 = kommt nie)
+function cleanRandomizers(raw) {
+  const used = new Set();
+  return (Array.isArray(raw) ? raw : []).slice(0, 30).map((r, i) => {
+    let name = String(r?.name || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30) || `zufall${i + 1}`;
+    while (used.has(name)) name += '2';
+    used.add(name);
+    const cooldown = r?.cooldown === '' || r?.cooldown == null ? null : Number(r.cooldown);
+    return {
+      name,
+      command: String(r?.command || '').trim().split(/\s+/)[0].slice(0, 40),
+      cooldown: Number.isFinite(cooldown) ? Math.max(0, Math.min(86400, cooldown)) : null,
+      mode: ['all', 'reply', 'whisper', 'none'].includes(r?.mode) ? r.mode : 'reply',
+      text: String(r?.text ?? '{treffer}').slice(0, 450),
+      entries: (Array.isArray(r?.entries) ? r.entries : []).slice(0, 500)
+        .map((e) => ({ text: String(e?.text ?? '').trim().slice(0, 400), weight: Math.max(0, Math.min(1000, Number(e?.weight ?? 1) || 0)) }))
+        .filter((e) => e.text),
+    };
+  });
 }
 
 module.exports = { ModuleManager };

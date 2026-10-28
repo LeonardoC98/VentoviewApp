@@ -116,7 +116,7 @@ class Bridge {
       return;
     }
     res.writeHead(pathname === '/' ? 200 : 404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ name: 'VentoView', version: this.version }));
+    res.end(JSON.stringify({ name: 'Ventoview', version: this.version }));
   }
 
   async onUpload(req, res) {

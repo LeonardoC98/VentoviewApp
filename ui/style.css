@@ -290,3 +290,49 @@ code { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: 
 .plan { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
 .plan.free { background: rgba(52, 211, 153, .15); color: #34d399; }
 .plan.premium { background: rgba(139, 92, 246, .18); color: #c4b5fd; }
+
+/* Aktiv-Schalter, Erweiterungs-Assistent, Tastenkürzel, Teilen */
+.active-switch { display: flex; align-items: center; padding-left: 4px; cursor: pointer; }
+.wizard { padding: 4px 20px 20px; line-height: 1.55; }
+.wizard ol { padding-left: 20px; display: grid; gap: 12px; }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+.hotkey-editor { display: grid; gap: 8px; }
+.hotkeys { display: grid; gap: 6px; }
+.hotkey { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.hotkey b { flex: 1; }
+.hotkey kbd { font-family: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; }
+.hotkey-new { display: flex; gap: 8px; }
+.hotkey-new input { flex: 1; }
+.empty.small { padding: 8px; font-size: 13px; }
+.panel.wide { max-width: none; }
+.checks { display: grid; gap: 6px; margin: 10px 0; }
+.check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.check small { opacity: .6; }
+#tab-share .actions { display: flex; gap: 8px; margin: 14px 0 6px; }
+#tab-share .actions input { flex: 1; }
+#tab-share .section-head span { display: flex; gap: 8px; }
+.hotkey code { font-size: 11px; opacity: .7; }
+.hotkey-new .btn { white-space: nowrap; }
+.btn.icon-only { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
+.btn.icon-only .icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+/* Logo oben links öffnet die Home-Seite */
+button.brand { padding: 4px 8px 4px 4px; margin-left: -4px; border: 0; border-radius: 10px; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+button.brand:hover { background: rgba(255, 255, 255, .06); }
+
+/* Zufallsgeneratoren (Chat-Bot) */
+.randomizers { display: grid; gap: 10px; }
+.rnd { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.rnd-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255, 255, 255, .03); }
+.rnd-head b { font-size: 14px; }
+.rnd-head small { flex: 1; }
+.rnd-body { display: grid; gap: 10px; padding: 12px; }
+.rnd-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rnd-grid label, .rnd-text { display: grid; gap: 4px; font-size: 12px; color: var(--muted, #8b8b99); }
+.rnd-grid input, .rnd-grid select, .rnd-text input, .rnd-entry input { width: 100%; min-width: 0; }
+.rnd-entries { display: grid; gap: 4px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+.rnd-entry { display: grid; grid-template-columns: minmax(0, 1fr) 190px 30px; gap: 6px; align-items: center; }
+.rnd-entry.head { font-size: 11.5px; color: var(--muted, #8b8b99); position: sticky; top: 0; background: var(--panel, #16161d); }
+.rnd-chance { display: flex; align-items: center; gap: 6px; }
+.rnd-chance select { flex: 1; }
+.rnd-chance small { width: 54px; text-align: right; color: var(--muted, #8b8b99); font-size: 11.5px; }
+.rnd-actions { display: flex; flex-wrap: wrap; gap: 6px; }

@@ -1,9 +1,9 @@
 const { EventEmitter } = require('node:events');
 
-// Öffentliche Twitch-App „VentoView App“ – die Client-ID ist nicht geheim, ein Secret gibt es nicht
+// Öffentliche Twitch-App „Ventoview App“ – die Client-ID ist nicht geheim, ein Secret gibt es nicht
 const CLIENT_ID = '0j2rkj9nzvqtayn5a71icucgr5b93r';
-// Chat lesen, Bits, Abos, Follower und Kanalpunkte
-const SCOPES = 'user:read:chat bits:read channel:read:subscriptions moderator:read:followers channel:read:redemptions';
+// Chat lesen, Bits, Abos, Follower und Kanalpunkte – dazu Chat schreiben und Whispers (Chat-Bot)
+const SCOPES = 'user:read:chat bits:read channel:read:subscriptions moderator:read:followers channel:read:redemptions user:write:chat user:manage:whispers';
 
 /**
  * Twitch-Verbindung der App (für Module wie Twitch-Chat und Alerts). Anmeldung per Gerätecode:
@@ -28,6 +28,11 @@ class TwitchAuth extends EventEmitter {
 
   get user() {
     return this.data ? { id: this.data.userId, login: this.data.login } : null;
+  }
+
+  // Erlaubnisse des Tokens – null bei älteren Verbindungen, bis das Token einmal erneuert wurde
+  get scopes() {
+    return this.data?.scopes || null;
   }
 
   state() {
@@ -119,7 +124,7 @@ class TwitchAuth extends EventEmitter {
     if (!info.user_id) throw new Error('Twitch-Anmeldung ungültig.');
     this.save({
       access: tokens.access_token, refresh: tokens.refresh_token,
-      expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000, userId: info.user_id, login: info.login,
+      expiresAt: Date.now() + (tokens.expires_in || 3600) * 1000, userId: info.user_id, login: info.login, scopes: info.scopes || [],
     });
   }
 
@@ -136,7 +141,10 @@ class TwitchAuth extends EventEmitter {
         this.save(null);
         return null;
       }
-      this.save({ ...this.data, access: data.access_token, refresh: data.refresh_token || this.data.refresh, expiresAt: Date.now() + (data.expires_in || 3600) * 1000 });
+      this.save({
+        ...this.data, access: data.access_token, refresh: data.refresh_token || this.data.refresh,
+        expiresAt: Date.now() + (data.expires_in || 3600) * 1000, scopes: data.scope || this.data.scopes,
+      });
       return data.access_token;
     })().finally(() => { this.refreshing = null; });
     return this.refreshing;

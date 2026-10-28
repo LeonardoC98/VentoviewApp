@@ -6,7 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const DESIGN_ID = /^[a-z0-9]{8,32}$/;
-const ASSET_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm)$/;
+const ASSET_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mp3|wav|ogg|m4a)$/;
 const MB = 1024 * 1024;
 const TYPES = {
   'image/png': { ext: 'png', kind: 'image', max: 10 * MB },

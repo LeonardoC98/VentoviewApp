@@ -1,10 +1,13 @@
-const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, safeStorage, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Account } = require('./core/account');
 const { Config } = require('./core/config');
 const { Bridge } = require('./core/bridge');
 const { DesignStore } = require('./core/designs');
+const { ExtensionManager } = require('./core/extensions');
+const { Sharing } = require('./core/sharing');
+const { PcInfo } = require('./core/pcinfo');
 const { KeywordSources, normalizeKeywords } = require('./core/keywords');
 const { ModuleManager } = require('./core/modules');
 const { TwitchAuth } = require('./core/twitch');
@@ -20,6 +23,8 @@ let config;
 let bridge;
 let designs;
 let modules;
+let extensions;
+let sharing;
 let updater;
 let keywordSources;
 let account;
@@ -50,7 +55,7 @@ async function init() {
     tray?.setContextMenu(trayMenu());
     if (state.status === 'ready' && Notification.isSupported()) {
       const note = new Notification({
-        title: `VentoView ${state.version} ist bereit`,
+        title: `Ventoview ${state.version} ist bereit`,
         body: 'Wird beim Beenden installiert – oder jetzt in der App auf „Installieren“ klicken.',
       });
       note.on('click', showWindow);
@@ -62,7 +67,7 @@ async function init() {
     version: app.getVersion(),
     allowedOrigins: () => [originOf(config.get('siteUrl'))],
     // 'core' ist die Grund-App selbst: sie liefert die eigenen Keywords
-    moduleState: (id) => (id === 'core' ? { installed: true, status: { state: 'ok', text: 'VentoView' } } : modules.state(id)),
+    moduleState: (id) => (id === 'core' ? { installed: true, status: { state: 'ok', text: 'Ventoview' } } : modules.state(id)),
     assetPath: (file) => designs.assetPath(file),
     moduleFile: (id, name) => modules?.publicFile(id, name),
     uploadAsset: (upload) => designs.addAsset(upload),
@@ -89,7 +94,7 @@ async function init() {
   });
   keywordSources.apply(config.get('keywords'));
 
-  // VentoView-Konto (Lizenzschein) und Twitch-Verbindung für Module
+  // Ventoview-Konto (Lizenzschein) und Twitch-Verbindung für Module
   account = new Account({ config, siteUrl: () => config.get('siteUrl') });
   twitch = new TwitchAuth({ config, safeStorage, openExternal: (url) => shell.openExternal(url) });
   twitch.on('change', pushState);
@@ -103,6 +108,12 @@ async function init() {
     return modules.settingsOf(msg.module);
   });
 
+  extensions = new ExtensionManager({ dir: path.join(userData, 'extensions'), account, electron: { globalShortcut, BrowserWindow, ipcMain } });
+  extensions.on('change', () => {
+    modules?.syncExtensions();
+    pushState();
+  });
+
   modules = new ModuleManager({
     dir: path.join(userData, 'modules'),
     dataDir: path.join(userData, 'module-data'),
@@ -111,20 +122,50 @@ async function init() {
     appVersion: app.getVersion(),
     account,
     twitch,
+    config,
+    extensions,
   });
   modules.on('change', pushState);
-  account.on('change', () => {
-    modules.syncLicense();
+  account.on('change', async () => {
+    await modules.syncLicense();
+    modules.autoInstall();
     pushState();
   });
 
+  // Vorlagen und Home-Einstellungen teilen (Export/Import als Ordner)
+  sharing = new Sharing({ designs, config, siteUrl: () => config.get('siteUrl'), documents: app.getPath('documents') });
+
+  // Für die Webseite (Home, Module): Liste der Module, aktiv/inaktiv, Anordnung des Home-Bildschirms
+  bridge.handle('modules.list', () => modules.list().installed.map((m) => ({
+    id: m.id, name: m.name, version: m.version, accent: m.accent, badge: m.badge,
+    locked: m.locked, inactive: m.inactive, needsExtension: m.needsExtension, requires: m.requires || null, status: m.status,
+  })));
+  bridge.handle('module.active', (msg) => modules.setActive(String(msg.module), Boolean(msg.active)));
+  // PC-Info (Webseite → Home → PC-Info): Hardware einmal sammeln, Live-Werte bei jedem Abruf
+  const pcInfo = new PcInfo();
+  bridge.handle('pc.info', async (msg) => ({ hardware: await pcInfo.hardware(Boolean(msg.force)), live: await pcInfo.live() }));
+  bridge.handle('pc.live', () => pcInfo.live());
+  bridge.handle('home.get', () => config.get('home') || null);
+  bridge.handle('home.save', (msg) => {
+    const home = sharing.cleanHome(msg.home);
+    config.set({ home });
+    return home;
+  });
+  bridge.handle('hub.import', async (msg) => {
+    const result = await sharing.importFromSite(String(msg.path || ''));
+    for (const design of result.saved) bridge.designChanged(design.id, design);
+    pushState();
+    return { designs: result.saved.length, media: result.media };
+  });
+
   await startBridge();
+  await extensions.loadInstalled();
   await modules.loadInstalled();
   account.start();
-  modules.fetchRegistry();
+  modules.fetchRegistry().then(() => modules.autoInstall());
   // War die Webseite beim Start nicht erreichbar, regelmäßig neu versuchen
   setInterval(() => {
-    if (modules.registryError) modules.fetchRegistry();
+    if (modules.registryError) modules.fetchRegistry().then(() => modules.autoInstall());
   }, 10_000);
   applyAutostart();
   createTray();
@@ -169,7 +210,7 @@ function applyAutostart() {
 
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, 'tray.png')));
-  tray.setToolTip('VentoView');
+  tray.setToolTip('Ventoview');
   tray.setContextMenu(trayMenu());
   tray.on('click', showWindow);
 }
@@ -177,7 +218,7 @@ function createTray() {
 function trayMenu() {
   const { status, version } = updater.state;
   return Menu.buildFromTemplate([
-    { label: 'VentoView öffnen', click: showWindow },
+    { label: 'Ventoview öffnen', click: showWindow },
     { label: 'Webseite öffnen', click: () => shell.openExternal(config.get('siteUrl')) },
     ...(status === 'ready' ? [{ label: `Update ${version} installieren`, click: () => updater.install() }] : []),
     { type: 'separator' },
@@ -197,7 +238,7 @@ function showWindow() {
     height: 700,
     minWidth: 760,
     minHeight: 560,
-    title: 'VentoView',
+    title: 'Ventoview',
     icon: path.join(ASSETS, 'icon.png'),
     backgroundColor: '#0e0e12',
     show: false,
@@ -221,7 +262,7 @@ function showWindow() {
     event.preventDefault();
     win.hide();
     if (!config.get('trayHintShown') && Notification.isSupported()) {
-      new Notification({ title: 'VentoView läuft weiter', body: 'Du findest VentoView unten rechts im Tray.' }).show();
+      new Notification({ title: 'Ventoview läuft weiter', body: 'Du findest Ventoview unten rechts im Tray.' }).show();
       config.set({ trayHintShown: true });
     }
   });
@@ -249,6 +290,8 @@ function getState() {
     update: updater.state,
     account: account?.state() ?? null,
     twitch: twitch?.state() ?? null,
+    extensions: extensions?.list() ?? [],
+    shareDir: sharing?.shareDir ?? null,
     ...modules.list(),
   };
 }
@@ -269,7 +312,50 @@ function handle(channel, fn) {
 }
 
 handle('state:get', getState);
-handle('modules:refresh', () => modules.fetchRegistry());
+handle('modules:refresh', async () => {
+  await modules.fetchRegistry();
+  await modules.autoInstall();
+});
+handle('modules:active', (id, active) => modules.setActive(id, active));
+handle('extensions:install', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Ventoview-Erweiterung wählen',
+    properties: ['openFile'],
+    filters: [{ name: 'Ventoview-Erweiterung', extensions: ['vvext'] }],
+  });
+  return canceled ? null : extensions.installFile(filePaths[0]);
+});
+handle('extensions:remove', (id) => extensions.remove(id));
+// Controller-/MIDI-Eingabe aufnehmen (Modul Tastenkürzel): 'button' oder 'value' → z. B. pad:b3, midi:cc74
+handle('input:record', (kind) => {
+  const ext = extensions.get('shortcuts');
+  if (!ext?.record) throw new Error('Dafür braucht es die Tastenkürzel-Erweiterung ab Version 1.1 – auf der Webseite neu herunterladen.');
+  return ext.record(kind === 'value' ? 'value' : 'button');
+});
+handle('extensions:download', (id) => shell.openExternal(new URL(`api/extensions/${encodeURIComponent(id)}`, config.get('siteUrl')).href));
+handle('share:list', () => sharing.overview());
+handle('share:export', async (opts) => {
+  const dir = await sharing.exportTo(opts);
+  shell.showItemInFolder(path.join(dir, 'ventoview-export.json'));
+  return dir;
+});
+handle('share:import', async (dir) => {
+  if (!dir) {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: 'Export-Ordner wählen', defaultPath: sharing.shareDir, properties: ['openDirectory'],
+    });
+    if (canceled) return null;
+    dir = filePaths[0];
+  }
+  const result = await sharing.importFrom(dir);
+  for (const design of result.saved) bridge.designChanged(design.id, design);
+  pushState();
+  return { designs: result.saved.length, media: result.media, home: result.home };
+});
+handle('share:open', async () => {
+  await sharing.ensureShareDir();
+  return shell.openPath(sharing.shareDir);
+});
 handle('modules:install', (id) => modules.install(id));
 handle('modules:uninstall', (id) => modules.uninstall(id));
 handle('modules:settings', (id, values) => modules.saveSettings(id, values));
@@ -279,6 +365,12 @@ handle('modules:open', (id) => {
   return shell.openExternal(url.href);
 });
 handle('site:open', () => shell.openExternal(config.get('siteUrl')));
+// Logo oben links: Home-Seite (Home, Module, Hub) – mit Port, falls nicht der Standard
+handle('site:home', () => {
+  const url = new URL('home/', config.get('siteUrl'));
+  if (config.get('port') !== 47800) url.searchParams.set('port', config.get('port'));
+  return shell.openExternal(url.href);
+});
 handle('account:open', () => shell.openExternal(new URL('konto/', config.get('siteUrl')).href));
 handle('account:pair', (code) => account.pair(code));
 handle('account:disconnect', () => account.clear());
@@ -327,7 +419,7 @@ handle('settings:save', async (patch) => {
 });
 
 app.on('window-all-closed', () => {
-  // Bewusst leer: VentoView läuft im Tray weiter
+  // Bewusst leer: Ventoview läuft im Tray weiter
 });
 
 app.on('before-quit', async (event) => {
@@ -336,6 +428,7 @@ app.on('before-quit', async (event) => {
   event.preventDefault();
   keywordSources?.stop();
   await modules?.stopAll();
+  await extensions?.stopAll();
   await bridge?.close();
   app.quit();
 });

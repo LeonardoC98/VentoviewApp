@@ -4,7 +4,7 @@ const { EventEmitter } = require('node:events');
 const REFRESH_MS = 6 * 3600 * 1000;
 
 /**
- * Verbindung zum VentoView-Konto. Die Webseite stellt einen signierten Lizenzschein aus (welche Module frei sind,
+ * Verbindung zum Ventoview-Konto. Die Webseite stellt einen signierten Lizenzschein aus (welche Module frei sind,
  * gültig für ein paar Tage); die App prüft die Unterschrift und holt sich regelmäßig einen frischen.
  * Gespeichert wird in config.json → account: { deviceToken, license, publicKey }.
  */

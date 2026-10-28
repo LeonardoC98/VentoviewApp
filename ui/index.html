@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
-<title>VentoView</title>
+<title>Ventoview</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">
+    <button type="button" class="brand" id="brandBtn" title="Home auf der Webseite öffnen">
       <img src="../assets/icon.png" alt="">
-      <span>VentoView</span>
-    </div>
+      <span>Ventoview</span>
+    </button>
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" data-tab="modules" aria-selected="true">Module</button>
       <button type="button" role="tab" data-tab="keywords" aria-selected="false">Keywords</button>
+      <button type="button" role="tab" data-tab="share" aria-selected="false">Teilen</button>
       <button type="button" role="tab" data-tab="settings" aria-selected="false">Einstellungen</button>
     </nav>
     <div class="top-right">
@@ -46,7 +47,7 @@
       </div>
       <p class="intro">
         Eigene Keywords benutzt du im Editor jedes Moduls, z. B. <code>{streamer}</code> in einem Text – sie stehen dort unter
-        „Variablen → VentoView“. Ein Keyword kann ein fester Text sein oder laufend neu gelesen werden: aus einer Datei,
+        „Variablen → Ventoview“. Ein Keyword kann ein fester Text sein oder laufend neu gelesen werden: aus einer Datei,
         einem PowerShell-Befehl oder einer Webadresse. Fest eingebaut sind <code>{zeit}</code>, <code>{datum}</code>,
         <code>{wochentag}</code> und <code>{laufzeit}</code>.
       </p>
@@ -70,7 +71,7 @@
         <div class="help-body">
           <p><strong>Text</strong> – feste Angaben wie dein Name, Discord oder deine PC-Teile. Ändert sich nur, wenn du ihn änderst.</p>
           <p><strong>Datei</strong> – der Inhalt einer Textdatei. Viele Stream-Tools (Musik-Player, Bots, Spendentools) können Infos
-            in eine .txt-Datei schreiben. VentoView liest sie im eingestellten Abstand und zeigt immer den neuesten Stand.</p>
+            in eine .txt-Datei schreiben. Ventoview liest sie im eingestellten Abstand und zeigt immer den neuesten Stand.</p>
           <p><strong>Befehl</strong> – die Ausgabe eines PowerShell-Befehls. Damit kommst du an fast alles, was Windows weiß.
             Teste den Befehl zuerst in PowerShell: Was dort als Text herauskommt, wird der Wert. Langsame Befehle lieber selten ausführen (30–300 s).</p>
           <p><strong>Webadresse</strong> – die Antwort einer Adresse, z. B. eines Programms mit eingebautem Webserver oder einer API.
@@ -87,16 +88,61 @@
       </details>
     </section>
 
+    <section id="tab-share" hidden>
+      <div class="section-head">
+        <h2>Vorlagen exportieren</h2>
+      </div>
+      <div class="panel wide">
+        <p class="intro">Wähle Vorlagen aus – eigene Bilder, Videos und Töne darin packt Ventoview mit ein.</p>
+        <div class="checks" id="shareDesigns"></div>
+        <label class="check"><input type="checkbox" id="shareHome"><span>Home-Einstellungen mitnehmen</span><small>Anordnung deines Home-Bildschirms auf der Webseite</small></label>
+        <div class="actions">
+          <input type="text" id="shareName" placeholder="Name des Ordners (optional)" maxlength="60">
+          <button type="button" class="btn primary" id="exportBtn">Exportieren</button>
+        </div>
+        <p class="message" id="shareMessage" role="status"></p>
+      </div>
+
+      <div class="section-head">
+        <h2>Importieren</h2>
+        <span>
+          <button type="button" class="btn ghost" id="openShareDir">Teilen-Ordner öffnen</button>
+          <button type="button" class="btn ghost" id="pickShare">Anderen Ordner wählen …</button>
+        </span>
+      </div>
+      <div class="panel wide" id="shareFolders"></div>
+
+      <details class="help panel wide" open>
+        <summary>So teilst du Vorlagen</summary>
+        <div class="help-body">
+          <p><strong>1. Exportieren:</strong> Vorlagen anhaken, „Exportieren“. Ventoview legt einen Ordner in <code id="shareDir">Dokumente\Ventoview\Teilen</code> an und zeigt ihn dir.</p>
+          <p><strong>2. Weitergeben:</strong> Den ganzen Ordner verschicken – am einfachsten als ZIP (Rechtsklick → „Senden an“ → „ZIP-komprimierter Ordner“). Wichtig ist der ganze Ordner, nicht nur die .json-Datei, sonst fehlen Bilder und Töne.</p>
+          <p><strong>3. Einsetzen:</strong> Wer ihn bekommt, entpackt ihn und legt den Ordner in seinen Teilen-Ordner (<em>Dokumente → Ventoview → Teilen</em>, Knopf „Teilen-Ordner öffnen“). Er erscheint dann oben in der Liste – auf „Importieren“ klicken. Liegt er woanders: „Anderen Ordner wählen“.</p>
+          <p>Vorhandene Vorlagen werden nie überschrieben. Module, die eine Vorlage braucht, müssen in der App aktiv sein.</p>
+        </div>
+      </details>
+    </section>
+
     <section id="tab-settings" hidden>
       <div class="connections">
         <div class="panel connection" id="accountPanel"></div>
         <div class="panel connection" id="twitchPanel"></div>
       </div>
+      <div class="panel">
+        <div class="row">
+          <span>
+            <strong>Erweiterungen</strong>
+            <small>Erweitern die App auf diesem PC, z. B. um Tastenkürzel. Die .vvext-Datei gibt es nach dem Kauf auf der Webseite.</small>
+          </span>
+          <button type="button" class="btn" id="addExtension">Datei hinzufügen …</button>
+        </div>
+        <div id="extensionList"></div>
+      </div>
       <form class="panel" id="settingsForm">
         <label class="row">
           <span>
             <strong>Mit Windows starten</strong>
-            <small id="autostartHint">VentoView startet beim Hochfahren unsichtbar im Tray.</small>
+            <small id="autostartHint">Ventoview startet beim Hochfahren unsichtbar im Tray.</small>
           </span>
           <span class="switch"><input type="checkbox" name="autostart"><span></span></span>
         </label>
