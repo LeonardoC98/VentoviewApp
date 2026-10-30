@@ -175,6 +175,21 @@
           <button type="button" class="btn" id="iconsBtn">Modul-Symbole anpassen …</button>
         </div>
       </div>
+      <div class="panel">
+        <div class="row last">
+          <span>
+            <strong>Sprache</strong>
+            <small>Gilt für die App und die Webseite – eine Änderung hier ändert auch die Webseite und umgekehrt.</small>
+          </span>
+          <select id="langSelect" class="lang-select" data-no-i18n>
+            <option value="de">Deutsch</option>
+            <option value="en">English</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+      </div>
       <form class="panel" id="settingsForm">
         <label class="row">
           <span>
@@ -221,6 +236,8 @@
   <dialog class="modal" id="moduleDialog"></dialog>
   <div class="toast" id="toast" role="alert" hidden></div>
 
+  <script src="i18n.js"></script>
+  <script src="i18n-dict.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

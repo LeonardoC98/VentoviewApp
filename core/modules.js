@@ -27,8 +27,9 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale }) {
     super();
+    this.systemLocale = systemLocale; // () => z. B. 'de-DE' (Sprache von Windows)
     this.keys = keys;       // globale Tastendrücke (nur solange ein Modul zuhört)
     this.appVersion = appVersion || '0.0.0';
     this.account = account; // Lizenzschein: welche Module freigeschaltet sind
@@ -133,6 +134,10 @@ class ModuleManager extends EventEmitter {
       }),
       // Aktuelle Werte aller Module und eigenen Keywords, z. B. { divsoloduo: 'Gold II', … } – nur lesen
       values: () => Object.assign({}, ...this.bridge.latest.values()),
+      // Sprache der App (de, en, it, es, fr) – z. B. für Tastennamen
+      language: () => this.config?.get('language')?.code || 'en',
+      // Sprache von Windows (zwei Buchstaben, z. B. de) – Standard für Tastennamen
+      systemLanguage: () => String(this.systemLocale?.() || Intl.DateTimeFormat().resolvedOptions().locale || 'en').slice(0, 2).toLowerCase(),
       // Twitch-Verbindung der App: user, scopes, token(), clientId, onChange()
       twitch: this.twitch && {
         get user() { return manager.twitch.user; },

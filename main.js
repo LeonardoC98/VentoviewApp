@@ -16,6 +16,9 @@ const { Backup } = require('./core/backup');
 const { KeywordSources, normalizeKeywords } = require('./core/keywords');
 const { ModuleManager } = require('./core/modules');
 const { References } = require('./core/references');
+const { tr } = require('./core/i18n-main');
+// Text in der eingestellten Sprache (Tray, Hinweise, Datei-Fenster)
+const t = (text, ...args) => tr((config?.get('language') || {}).code || 'en', text, ...args);
 const { TwitchAuth } = require('./core/twitch');
 const { Updater } = require('./core/updater');
 
@@ -62,8 +65,8 @@ async function init() {
     tray?.setContextMenu(trayMenu());
     if (state.status === 'ready' && Notification.isSupported()) {
       const note = new Notification({
-        title: `Ventoview ${state.version} ist bereit`,
-        body: 'Wird beim Beenden installiert – oder jetzt in der App auf „Installieren“ klicken.',
+        title: t('Ventoview {0} ist bereit', state.version),
+        body: t('Wird beim Beenden installiert – oder jetzt in der App auf „Installieren“ klicken.'),
       });
       note.on('click', showWindow);
       note.show();
@@ -134,6 +137,7 @@ async function init() {
     twitch,
     config,
     extensions,
+    systemLocale: () => app.getLocale(),
   });
   modules.on('change', pushState);
   // Wo eigene Namen benutzt werden – fürs Umbenennen und Warnen vor dem Löschen (App-Keywords und Webseiten-Editor)
@@ -155,6 +159,13 @@ async function init() {
     locked: m.locked, inactive: m.inactive, needsExtension: m.needsExtension, requires: m.requires || null, status: m.status,
   })));
   bridge.handle('module.active', (msg) => modules.setActive(String(msg.module), Boolean(msg.active)));
+  // Sprache: die Webseite fragt nach und übernimmt die neuere Wahl – oder gibt ihre neuere an die App
+  bridge.handle('app.language', () => config.get('language') || { code: 'en', at: 0 });
+  bridge.handle('app.language.set', (msg) => {
+    const at = Math.min(Date.now() + 60_000, Math.max(0, Number(msg.at) || Date.now()));
+    const current = config.get('language') || { at: 0 };
+    return at > (current.at || 0) ? setLanguage(String(msg.code || ''), at) : current;
+  });
   // PC-Info (Webseite → Home → PC-Info): Hardware einmal sammeln, Live-Werte bei jedem Abruf
   const pcInfo = new PcInfo();
   bridge.handle('pc.info', async (msg) => ({ hardware: await pcInfo.hardware(Boolean(msg.force)), live: await pcInfo.live() }));
@@ -256,11 +267,11 @@ function createTray() {
 function trayMenu() {
   const { status, version } = updater.state;
   return Menu.buildFromTemplate([
-    { label: 'Ventoview öffnen', click: showWindow },
-    { label: 'Webseite öffnen', click: () => shell.openExternal(config.get('siteUrl')) },
-    ...(status === 'ready' ? [{ label: `Update ${version} installieren`, click: () => updater.install() }] : []),
+    { label: t('Ventoview öffnen'), click: showWindow },
+    { label: t('Webseite öffnen'), click: () => shell.openExternal(config.get('siteUrl')) },
+    ...(status === 'ready' ? [{ label: t('Update {0} installieren', version), click: () => updater.install() }] : []),
     { type: 'separator' },
-    { label: 'Beenden', click: () => app.quit() },
+    { label: t('Beenden'), click: () => app.quit() },
   ]);
 }
 
@@ -300,7 +311,7 @@ function showWindow() {
     event.preventDefault();
     win.hide();
     if (!config.get('trayHintShown') && Notification.isSupported()) {
-      new Notification({ title: 'Ventoview läuft weiter', body: 'Du findest Ventoview unten rechts im Tray.' }).show();
+      new Notification({ title: t('Ventoview läuft weiter'), body: t('Du findest Ventoview unten rechts im Tray.') }).show();
       config.set({ trayHintShown: true });
     }
   });
@@ -326,6 +337,7 @@ function getState() {
     keywordErrors: keywordSources?.errors ?? {},
     keywordChildren: keywordSources?.children ?? {},
     keywordConflicts: modules?.keywordConflicts() ?? {},
+    language: config.get('language') || { code: 'en', at: 0 },
     moduleIcons: config.get('moduleIcons') || {},
     reservedNames: Object.fromEntries(modules?.moduleNames() ?? []),
     update: updater.state,
@@ -358,6 +370,18 @@ handle('modules:refresh', async () => {
   await modules.autoInstall();
 });
 handle('modules:active', (id, active) => modules.setActive(id, active));
+// Sprache von App und Webseite – die Webseite gleicht sich über die Brücke ab (app.language)
+const LANGS = ['de', 'en', 'it', 'es', 'fr'];
+function setLanguage(code, at = Date.now()) {
+  if (!LANGS.includes(code)) throw new Error('Unbekannte Sprache.');
+  const current = config.get('language') || {};
+  if (current.code === code && (current.at || 0) >= at) return current;
+  config.set({ language: { code, at } });
+  pushState();
+  tray?.setContextMenu(trayMenu());
+  return config.get('language');
+}
+handle('app:language', (code) => setLanguage(String(code || '')));
 // Eigenes Modul-Symbol (Einstellungen): fertig zugeschnittenes 256-px-PNG als data-URL – null = wieder das Standard-Symbol
 handle('modules:icon', (id, dataUrl) => {
   const key = String(id || '');
@@ -374,7 +398,7 @@ handle('modules:icon', (id, dataUrl) => {
 });
 handle('extensions:install', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Ventoview-Erweiterung wählen',
+    title: t('Ventoview-Erweiterung wählen'),
     properties: ['openFile'],
     filters: [{ name: 'Ventoview-Erweiterung', extensions: ['vvext'] }],
   });
@@ -399,7 +423,7 @@ handle('share:export', async (opts) => {
 handle('share:import', async (dir) => {
   if (!dir) {
     const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: 'Export-Ordner wählen', defaultPath: sharing.shareDir, properties: ['openDirectory'],
+      title: t('Export-Ordner wählen'), defaultPath: sharing.shareDir, properties: ['openDirectory'],
     });
     if (canceled) return null;
     dir = filePaths[0];
@@ -419,7 +443,7 @@ handle('bot:export', async () => {
   const dir = path.join(app.getPath('documents'), 'Ventoview');
   fs.mkdirSync(dir, { recursive: true });
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: 'Ventoview-Bot exportieren',
+    title: t('Ventoview-Bot exportieren'),
     defaultPath: path.join(dir, `Ventoview-Bot ${new Date().toISOString().slice(0, 10)}.vviewbot`),
     filters: [{ name: 'Ventoview-Bot', extensions: ['vviewbot'] }],
   });
@@ -431,7 +455,7 @@ handle('bot:export', async () => {
 });
 handle('bot:import', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Ventoview-Bot importieren', defaultPath: path.join(app.getPath('documents'), 'Ventoview'), properties: ['openFile'],
+    title: t('Ventoview-Bot importieren'), defaultPath: path.join(app.getPath('documents'), 'Ventoview'), properties: ['openFile'],
     filters: [{ name: 'Ventoview-Bot', extensions: ['vviewbot'] }],
   });
   if (canceled || !filePaths[0]) return null;
@@ -448,9 +472,9 @@ handle('bot:import', async () => {
   if (clash) throw new Error(`Die Datei enthält den Generator {${clash.name}} – den Namen benutzt schon ein Modul. Bitte in der Datei umbenennen.`);
   const generators = data.blocks.filter((b) => b?.type === 'generator').length;
   const { response } = await dialog.showMessageBox(win, {
-    type: 'warning', title: 'Ventoview-Bot importieren', message: 'Alle Bot-Elemente werden ersetzt.',
+    type: 'warning', title: t('Ventoview-Bot importieren'), message: t('Alle Bot-Elemente werden ersetzt.'),
     detail: `Die Datei vom ${new Date(data.createdAt).toLocaleString('de-DE')} enthält ${data.blocks.length - generators} Elemente und ${generators} Zufallsgeneratoren. Deine jetzigen Befehle, Generatoren, Timer usw. werden durch diese ersetzt; dein Kanal bleibt.`,
-    buttons: ['Ersetzen', 'Abbrechen'], defaultId: 1, cancelId: 1, noLink: true,
+    buttons: [t('Ersetzen'), t('Abbrechen')], defaultId: 1, cancelId: 1, noLink: true,
   });
   if (response !== 0) return null;
   const { values } = modules.settingsOf('chatbot');
@@ -466,7 +490,7 @@ handle('backup:save', async () => {
   const backup = new Backup({ userData: app.getPath('userData'), config, version: app.getVersion(), documents: app.getPath('documents') });
   fs.mkdirSync(backup.dir, { recursive: true });
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
-    title: 'Alle App-Daten sichern',
+    title: t('Alle App-Daten sichern'),
     defaultPath: path.join(backup.dir, `Ventoview Sicherung ${new Date().toISOString().slice(0, 10)}.vview`),
     filters: [{ name: 'Ventoview-Sicherung', extensions: ['vview'] }],
   });
@@ -478,7 +502,7 @@ handle('backup:save', async () => {
 handle('backup:load', async () => {
   const backup = new Backup({ userData: app.getPath('userData'), config, version: app.getVersion(), documents: app.getPath('documents') });
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Sicherung laden', defaultPath: backup.dir, properties: ['openFile'],
+    title: t('Sicherung laden'), defaultPath: backup.dir, properties: ['openFile'],
     filters: [{ name: 'Ventoview-Sicherung', extensions: ['vview'] }],
   });
   if (canceled || !filePaths[0]) return null;
@@ -488,15 +512,15 @@ handle('backup:load', async () => {
   const media = data.files.filter((f) => f.path.startsWith('assets/') && !f.path.endsWith('index.json')).length;
   const { response } = await dialog.showMessageBox(win, {
     type: 'warning',
-    title: 'Sicherung laden',
-    message: 'Alle jetzigen Daten werden überschrieben.',
+    title: t('Sicherung laden'),
+    message: t('Alle jetzigen Daten werden überschrieben.'),
     detail: [
       `Sicherung vom ${created} (Ventoview ${data.manifest.app || '?'}): ${designs} Designs, ${media} eigene Medien, Modul-Einstellungen, Keywords, Home und App-Einstellungen.`,
       'Deine jetzigen Designs, Medien und Einstellungen werden ersetzt. Konto- und Twitch-Verbindung dieses PCs bleiben.',
       'Vorher legt Ventoview automatisch eine Sicherung des jetzigen Stands in Dokumente\\Ventoview\\Sicherungen an. Danach startet die App neu.',
       data.commands.length ? `⚠ Die Sicherung enthält ${data.commands.length} PowerShell-Befehl(e) als Keywords (${data.commands.join(', ')}). Die laufen danach auf diesem PC – nur laden, wenn die Datei von dir stammt!` : '',
     ].filter(Boolean).join('\n\n'),
-    buttons: ['Überschreiben und neu starten', 'Abbrechen'],
+    buttons: ['Überschreiben und neu starten', t('Abbrechen')],
     defaultId: 1,
     cancelId: 1,
     noLink: true,
@@ -571,7 +595,7 @@ handle('keywords:save', async (list, renames = []) => {
 handle('keywords:usage', (name) => references.usage(String(name || '')));
 handle('dialog:file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-    title: 'Datei für das Keyword wählen',
+    title: t('Datei für das Keyword wählen'),
     properties: ['openFile'],
     filters: [{ name: 'Textdateien', extensions: ['txt', 'json', 'log', 'csv'] }, { name: 'Alle Dateien', extensions: ['*'] }],
   });

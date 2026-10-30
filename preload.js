@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('streamhub', {
   saveKeywords: (list, renames) => ipcRenderer.invoke('keywords:save', list, renames),
   keywordUsage: (name) => ipcRenderer.invoke('keywords:usage', name),
   setModuleIcon: (id, dataUrl) => ipcRenderer.invoke('modules:icon', id, dataUrl),
+  setLanguage: (code) => ipcRenderer.invoke('app:language', code),
   pickFile: () => ipcRenderer.invoke('dialog:file'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),

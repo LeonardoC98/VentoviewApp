@@ -7,6 +7,8 @@ const DEFAULTS = {
   autostart: true,
   trayHintShown: false,
   keywords: [], // eigene Keywords: [{ key, value }]
+  // Sprache von App und Webseite: code + Zeitpunkt der Wahl (wer zuletzt gewählt hat, gewinnt beim Abgleich)
+  language: { code: 'en', at: 0 },
 };
 
 class Config {

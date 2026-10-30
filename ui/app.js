@@ -1198,9 +1198,18 @@ $('settingsForm').addEventListener('submit', async (event) => {
   $('settingsMessage').textContent = res.ok ? 'Gespeichert.' : res.error;
 });
 
+// Sprache aus dem App-Zustand (gilt auch für die Webseite)
+function applyLanguage() {
+  const code = state?.language?.code || 'en';
+  VVI18n.setLang(code);
+  if ($('langSelect').value !== code) $('langSelect').value = code;
+}
+$('langSelect').addEventListener('change', (e) => run('setLanguage', e.target.value));
+
 api.onState((next) => {
   const before = Object.keys(state?.keywordConflicts || {}).join();
   state = next;
+  applyLanguage();
   render();
   renderKeywordConflicts();
   updateKeywordPreviews();
@@ -1211,6 +1220,7 @@ api.onState((next) => {
 
 api.getState().then((res) => {
   state = res.result;
+  applyLanguage();
   render();
   renderKeywordConflicts();
   fillSettings();
