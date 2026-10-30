@@ -526,3 +526,5 @@ code { background: rgba(255, 255, 255, .06); }
 .icon-row .tile { width: 36px; height: 36px; font-size: 13px; }
 .icon-name { display: grid; flex: 1; min-width: 0; font-weight: 600; }
 .icon-name small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.icon-help { margin: 4px 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+#moduleDialog .icon-list { max-height: 60vh; overflow-y: auto; padding-right: 4px; }

@@ -73,8 +73,19 @@ function prepareIcon(file) {
   });
 }
 
-// Einstellungen → Modul-Symbole: je Modul das aktuelle Symbol, „Bild wählen“ und „Zurücksetzen“
+// Einstellungen → „Modul-Symbole anpassen …“: Fenster mit allen Modulen, je „Bild wählen“ und „Zurücksetzen“
+function openIconDialog() {
+  const dialog = $('moduleDialog');
+  dialog.replaceChildren(
+    h('div', { class: 'dialog-head' }, h('h3', {}, 'Modul-Symbole'), h('button', { type: 'button', class: 'btn ghost', onclick: () => dialog.close() }, '×')),
+    h('p', { class: 'icon-help' }, 'Quadratisch, mindestens 128 × 128 px (ideal 512 × 512), PNG mit Transparenz sieht am besten aus. Andere Formate werden mittig zugeschnitten und auf 256 × 256 px gebracht. Gilt hier in der App und auf der Home-Seite.'),
+    h('div', { class: 'icon-list', id: 'iconList' }));
+  renderIcons();
+  dialog.showModal();
+}
+
 function renderIcons() {
+  if (!$('iconList')) return;
   const mods = (state.installed || []).filter((m) => !m.locked);
   $('iconList').replaceChildren(...(mods.length ? mods.map((mod) => {
     const input = h('input', {
@@ -1159,6 +1170,7 @@ function keywordWarning() {
 }
 
 $('refreshBtn').addEventListener('click', () => run('refresh'));
+$('iconsBtn').addEventListener('click', openIconDialog);
 $('brandBtn').addEventListener('click', () => run('openHome'));
 $('addExtension').addEventListener('click', () => run('installExtension'));
 $('saveBackupBtn').addEventListener('click', async () => {
