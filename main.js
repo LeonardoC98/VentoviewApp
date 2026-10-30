@@ -94,6 +94,8 @@ async function init() {
   bridge.handle('asset.delete', (msg) => designs.removeAsset(msg));
   // Eigene Keywords: feste Werte sofort, Dateien/Befehle/Webadressen laufend neu lesen
   keywordSources = new KeywordSources({
+    // Für Python-Keywords: alle Variablen der Module und der Grund-App
+    allValues: () => Object.assign({}, ...bridge.latest.values()),
     onChange: () => {
       bridge.publish('core', { ...keywordSources.values });
       pushState();

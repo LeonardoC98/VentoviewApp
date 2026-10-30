@@ -99,7 +99,7 @@ class Backup {
       if (data.length !== size) throw new Error('Die Sicherung ist unvollständig.');
       return { path: rel, data };
     });
-    const commands = (manifest.config?.keywords || []).filter((k) => k?.source === 'command').map((k) => k.key);
+    const commands = (manifest.config?.keywords || []).filter((k) => k?.source === 'command' || k?.source === 'python').map((k) => k.key);
     return { manifest, files, commands };
   }
 

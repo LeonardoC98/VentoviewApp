@@ -797,6 +797,7 @@ const SOURCES = {
   file: { label: 'Datei', placeholder: 'C:\\Stream\\song.txt', interval: 2 },
   command: { label: 'Befehl', placeholder: 'PowerShell-Befehl, z. B. (Get-Date).Year', interval: 30 },
   url: { label: 'Webadresse', placeholder: 'https://…', interval: 30 },
+  python: { label: 'Python', placeholder: 'test = cpu * 2  # andere Variablen einfach mit Namen nutzen', interval: 5 },
 };
 
 const EXAMPLES = [
@@ -863,8 +864,8 @@ function keywordRow(entry = { source: 'text' }) {
   // Eingabefelder passend zur Quelle aufbauen
   const buildTarget = (src) => {
     const value = src === 'text' ? entry.value ?? '' : entry.target ?? '';
-    const main = src === 'command'
-      ? h('textarea', { name: 'target', rows: 1, spellcheck: 'false', placeholder: SOURCES[src].placeholder }, value)
+    const main = src === 'command' || src === 'python'
+      ? h('textarea', { name: 'target', rows: src === 'python' ? Math.min(14, Math.max(3, String(value).split('\n').length + 1)) : 1, spellcheck: 'false', placeholder: SOURCES[src].placeholder, class: src === 'python' ? 'kw-code' : null }, value)
       : h('input', { type: 'text', name: 'target', value, spellcheck: 'false', placeholder: SOURCES[src].placeholder });
     const parts = [main];
     if (src === 'file') {
@@ -875,6 +876,17 @@ function keywordRow(entry = { source: 'text' }) {
           if (res.ok && res.result) main.value = res.result;
         },
       }, '…'));
+    }
+    if (src === 'python') {
+      // Tab rückt ein statt das Feld zu verlassen
+      main.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab' || e.shiftKey) return;
+        e.preventDefault();
+        main.setRangeText('    ', main.selectionStart, main.selectionEnd, 'end');
+      });
+      parts.push(h('small', { class: 'kw-help' },
+        'Andere Variablen einfach mit Namen nutzen (z. B. cpu, songtitle) – Zahlen sind schon Zahlen. Den Wert setzt du mit ',
+        h('code', {}, `${entry.key || 'name'} = …`), ', „speicher“ merkt sich Werte zwischen den Läufen. Braucht Python 3.'));
     }
     if (src === 'url') parts.push(h('input', { type: 'text', name: 'path', value: entry.path || '', placeholder: 'JSON-Pfad (optional)', spellcheck: 'false' }));
     target.className = `kw-target kw-${src}`;
