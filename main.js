@@ -339,6 +339,7 @@ function getState() {
     keywordConflicts: modules?.keywordConflicts() ?? {},
     language: config.get('language') || { code: 'en', at: 0 },
     moduleIcons: config.get('moduleIcons') || {},
+    i18nStamp: modules.i18nStamp,
     reservedNames: Object.fromEntries(modules?.moduleNames() ?? []),
     update: updater.state,
     account: account?.state() ?? null,
@@ -382,6 +383,7 @@ function setLanguage(code, at = Date.now()) {
   return config.get('language');
 }
 handle('app:language', (code) => setLanguage(String(code || '')));
+handle('app:i18n', () => modules.i18n || {});
 // Eigenes Modul-Symbol (Einstellungen): fertig zugeschnittenes 256-px-PNG als data-URL – null = wieder das Standard-Symbol
 handle('modules:icon', (id, dataUrl) => {
   const key = String(id || '');

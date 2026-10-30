@@ -44,6 +44,30 @@ class ModuleManager extends EventEmitter {
     this.busy = new Set();
     this.registry = null;
     this.registryError = null;
+    this.i18n = null;       // Übersetzungen der Webseite (Module, Vorlagen, Meldungen) – siehe fetchI18n
+    this.i18nStamp = 0;
+  }
+
+  // Übersetzungen für Modul-Texte holen (i18n.json der Webseite) und für den Offline-Start zwischenspeichern
+  async fetchI18n() {
+    const cache = path.join(this.dataDir, '.i18n.json');
+    if (!this.i18n) {
+      try {
+        this.i18n = JSON.parse(await fs.readFile(cache, 'utf8'));
+        this.i18nStamp = Date.now();
+      } catch { /* noch nichts gespeichert */ }
+    }
+    try {
+      const res = await fetch(new URL('i18n.json', this.siteUrl()), { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      if (JSON.stringify(this.i18n) === text) return;
+      this.i18n = JSON.parse(text);
+      this.i18nStamp = Date.now();
+      await fs.mkdir(this.dataDir, { recursive: true });
+      await fs.writeFile(cache, text);
+      this.emit('change');
+    } catch { /* Webseite nicht erreichbar – Zwischenspeicher reicht */ }
   }
 
   async loadInstalled() {
@@ -256,6 +280,7 @@ class ModuleManager extends EventEmitter {
   }
 
   async fetchRegistry() {
+    this.fetchI18n();
     try {
       const res = await fetch(new URL('registry.json', this.siteUrl()), { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

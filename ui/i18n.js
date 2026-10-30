@@ -12,6 +12,8 @@
   const ATTRS = ['title', 'placeholder', 'aria-label'];
   const SKIP = 'script, style, textarea, code, pre, kbd, .sh-stage, [data-no-i18n], [contenteditable]';
   let lang = 'de';
+  // Im Overlay (Browser-Quelle im Stream) nur t() für Vorlagen – die Seite selbst nicht übersetzen, das kostet Zeit
+  const domless = typeof location !== 'undefined' && location.pathname.startsWith('/overlay');
   let observer = null;
   const listeners = new Set();
 
@@ -41,15 +43,38 @@
     const i = LANGS.indexOf(lang) - 1;
     const key = norm(text);
     if (!key) return null;
+    return lookupOne(key, i) ?? lookupParts(key, i);
+  }
+
+  function lookupOne(key, i) {
     const hit = exact.get(key);
     if (hit && !/\{\d\}/.test(key)) return hit[i] ?? null;
     for (const [re, list, order] of patterns) {
       const m = re.exec(key);
       if (!m || list[i] == null) continue;
-      if (!order) return list[i].replace(/\$(\d)/g, (_, n) => m[Number(n)] ?? '');
-      return list[i].replace(/\{(\d)\}/g, (_, n) => m[order.indexOf(Number(n)) + 1] ?? '');
+      // Eingesetzte Werte mit übersetzen, wenn sie selbst im Wörterbuch stehen (z. B. „Keyframe-Spur für „Höhe“ anlegen“)
+      const fill = (v = '') => (v && exact.get(v)?.[i]) || v;
+      if (!order) return list[i].replace(/\$(\d)/g, (_, n) => fill(m[Number(n)]));
+      return list[i].replace(/\{(\d)\}/g, (_, n) => fill(m[order.indexOf(Number(n)) + 1]));
     }
     return null;
+  }
+
+  // Zusammengesetzte Beschriftungen wie „League of Legends · Solo/Duo: Tier-Farbe {tiercolorsoloduo}“: die Stücke
+  // zwischen den Trennern einzeln übersetzen; eine Variable am Ende eines Stücks bleibt stehen
+  const SPLIT = /( · | – |: )/;
+  function lookupParts(key, i) {
+    if (!SPLIT.test(key)) return null;
+    let found = false;
+    const out = key.split(SPLIT).map((part, n) => {
+      if (n % 2) return part;
+      const [, body, tail = ''] = part.match(/^(.*?)((?:\s*\{[\w.]+\})*)$/);
+      const tr = body ? lookupOne(body, i) : null;
+      if (tr == null) return part;
+      found = true;
+      return tr + tail;
+    });
+    return found ? out.join('') : null;
   }
 
   // Für Code: t('Speichern') bzw. t('Verbunden als {0}', name)
@@ -110,7 +135,7 @@
   }
 
   function refresh() {
-    if (typeof document === 'undefined' || !document.documentElement) return;
+    if (typeof document === 'undefined' || !document.documentElement || domless) return;
     if (document.title) {
       document.vvTitle ??= document.title;
       const tr = lookup(document.vvTitle);
@@ -209,7 +234,7 @@
   const api = { LANGS, NAMES, add, t, setLang, choose, syncWithApp, get lang() { return lang; }, onChange: (fn) => listeners.add(fn), refresh, stored, browserLang };
   root.VVI18n = api;
 
-  if (typeof document !== 'undefined') {
+  if (typeof document !== 'undefined' && !domless) {
     const start = () => {
       observe();
       refresh();

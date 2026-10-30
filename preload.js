@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('streamhub', {
   keywordUsage: (name) => ipcRenderer.invoke('keywords:usage', name),
   setModuleIcon: (id, dataUrl) => ipcRenderer.invoke('modules:icon', id, dataUrl),
   setLanguage: (code) => ipcRenderer.invoke('app:language', code),
+  i18nExtra: () => ipcRenderer.invoke('app:i18n'),
   pickFile: () => ipcRenderer.invoke('dialog:file'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),

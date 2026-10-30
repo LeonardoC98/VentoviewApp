@@ -1199,8 +1199,14 @@ $('settingsForm').addEventListener('submit', async (event) => {
 });
 
 // Sprache aus dem App-Zustand (gilt auch für die Webseite)
+let i18nStamp = 0;
 function applyLanguage() {
   const code = state?.language?.code || 'en';
+  // Modul-Texte (Namen, Einstellungen, Meldungen) kommen als Wörterbuch von der Webseite
+  if (state?.i18nStamp && state.i18nStamp !== i18nStamp) {
+    i18nStamp = state.i18nStamp;
+    api.i18nExtra().then((res) => VVI18n.add(res?.result || {})).catch(() => {});
+  }
   VVI18n.setLang(code);
   if ($('langSelect').value !== code) $('langSelect').value = code;
 }
