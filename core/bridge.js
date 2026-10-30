@@ -13,6 +13,7 @@ const MEDIA_TYPES = {
   '.webp': 'image/webp',
   '.mp4': 'video/mp4',
   '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.ogg': 'audio/ogg',
@@ -174,6 +175,8 @@ class Bridge {
         'Cache-Control': 'public, max-age=31536000, immutable',
         'Cross-Origin-Resource-Policy': 'cross-origin',
         'X-Content-Type-Options': 'nosniff',
+        // Eigene Webseite darf Medien per CORS lesen – nötig für Audio-Effekte (Web Audio) im Editor und Overlay
+        ...(this.isAllowedOrigin(req) ? { 'Access-Control-Allow-Origin': req.headers.origin, Vary: 'Origin' } : {}),
       };
       // Videos werden in Teilen geladen (Range-Requests)
       const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
@@ -241,8 +244,8 @@ class Bridge {
   }
 
   stateMessage(id) {
-    const { installed, status } = this.moduleState(id);
-    return { type: 'state', module: id, installed, status, data: this.latest.get(id) ?? null };
+    const { installed, locked, status } = this.moduleState(id);
+    return { type: 'state', module: id, installed, locked: Boolean(locked), status, data: this.latest.get(id) ?? null };
   }
 
   ping() {

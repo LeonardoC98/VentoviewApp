@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 
 const FORMAT = 'ventoview-export';
 const MANIFEST = 'ventoview-export.json';
-const MEDIA_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mp3|wav|ogg|m4a)$/;
+const MEDIA_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mov|mp3|wav|ogg|m4a)$/;
 const HUB_PATH = /^hub\/[\w-]{1,60}\/$/;
 const LAYOUTS = ['grid', 'list', 'ring'];
 const SIZES = ['s', 'm', 'l'];
@@ -56,6 +56,8 @@ class Sharing {
     }
     const files = new Set();
     for (const design of designs) walk(design, (node) => { if (node.kind === 'asset' && MEDIA_FILE.test(node.file || '')) files.add(node.file); });
+    // Fotos der Home-Kacheln kommen mit, wenn die Home-Einstellungen exportiert werden
+    if (home) for (const photo of Object.values(this.config.get('home')?.photos || {})) if (MEDIA_FILE.test(photo?.file || '')) files.add(photo.file);
 
     const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '-');
     const folder = safeName(name) || `Ventoview ${stamp}`;
@@ -77,6 +79,7 @@ class Sharing {
       version: 1,
       createdAt: new Date().toISOString(),
       designs: designs.map(({ updatedAt, ...design }) => design),
+      // (Fotos der Home-Kacheln stehen in media, die Verweise in home.photos)
       media,
       home: home ? this.config.get('home') || null : undefined,
     };
@@ -153,11 +156,34 @@ class Sharing {
     for (const [id, size] of Object.entries(home.sizes || {})) {
       if (/^[\w-]{1,40}$/.test(id) && SIZES.includes(size)) sizes[id] = size;
     }
+    const pos = {};
+    for (const [id, at] of Object.entries(home.pos || {})) {
+      const [c, r] = Array.isArray(at) ? at.map(Number) : [];
+      if (/^[\w-]{1,40}$/.test(id) && Number.isInteger(c) && Number.isInteger(r) && c >= 1 && c <= 60 && r >= 1 && r <= 100) pos[id] = [c, r];
+    }
+    const photos = {};
+    for (const [id, p] of Object.entries(home.photos || {}).slice(0, 40)) {
+      if (!/^photo_[a-z0-9]{4,20}$/.test(id)) continue;
+      const link = typeof p?.link === 'string' && /^https?:\/\/\S+$/i.test(p.link) ? p.link.slice(0, 500) : null;
+      const title = typeof p?.title === 'string' ? p.title.trim().slice(0, 40) : '';
+      photos[id] = { title, link, file: MEDIA_FILE.test(p?.file || '') ? p.file : null, fit: ['contain', 'cover', 'fill'].includes(p?.fit) ? p.fit : 'cover', caption: p?.caption === true };
+    }
+    // Ordner im Schachbrett: { folder_xxx: { name, items: [Modul-ID oder photo_…] } }
+    const folders = {};
+    for (const [id, f] of Object.entries(home.folders || {}).slice(0, 40)) {
+      if (!/^folder_[a-z0-9]{4,20}$/.test(id)) continue;
+      const items = (Array.isArray(f?.items) ? f.items : []).map(String).filter((x) => /^[\w-]{1,40}$/.test(x) && !x.startsWith('folder_')).slice(0, 100);
+      folders[id] = { name: typeof f?.name === 'string' ? f.name.trim().slice(0, 40) : 'Ordner', items: [...new Set(items)] };
+    }
     return {
       layout: LAYOUTS.includes(home.layout) ? home.layout : 'grid',
       order: (Array.isArray(home.order) ? home.order : []).filter((id) => /^[\w-]{1,40}$/.test(id)).slice(0, 100),
       sizes,
       labels: home.labels !== false, // Ring: mit Namen oder nur Symbole
+      locked: home.locked === true, // gesperrt: im Home lässt sich nichts verschieben
+      pos, // Schachbrett: frei gesetzte Kacheln { id: [Spalte, Zeile] }
+      photos, // Schachbrett: Items { photo_xxx: { title, link, file, fit, caption } }
+      folders, // Schachbrett: Ordner { folder_xxx: { name, items } }
     };
   }
 }
@@ -185,7 +211,7 @@ async function freeDir(dir) {
 
 function kindOf(file) {
   const ext = file.split('.').pop();
-  if (['mp4', 'webm'].includes(ext)) return 'video';
+  if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
   if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return 'audio';
   return 'image';
 }

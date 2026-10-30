@@ -27,8 +27,9 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys }) {
     super();
+    this.keys = keys;       // globale Tastendrücke (nur solange ein Modul zuhört)
     this.appVersion = appVersion || '0.0.0';
     this.account = account; // Lizenzschein: welche Module freigeschaltet sind
     this.twitch = twitch;   // gemeinsame Twitch-Verbindung für Module
@@ -88,6 +89,16 @@ class ModuleManager extends EventEmitter {
       this.emit('change');
       return;
     }
+    // Bringt das Modul eine Variable mit, die du schon selbst benutzt (Generator, eigenes Keyword), läuft es nicht –
+    // sonst würde einer von beiden still den anderen überschreiben
+    const conflict = !entry.inactive && this.conflictMessage(id, manifest);
+    if (conflict) {
+      entry.conflict = true;
+      entry.status = { state: 'error', text: conflict };
+      this.bridge.moduleChanged(id);
+      this.emit('change');
+      return;
+    }
     if (entry.inactive || entry.needsExtension) {
       entry.status = entry.inactive
         ? { state: 'idle', text: 'Inaktiv' }
@@ -114,6 +125,12 @@ class ModuleManager extends EventEmitter {
       },
       // Test-Knöpfe im Editor und in der App (module.json → "actions")
       onAction: (callback) => { entry.onAction = callback; },
+      // Globale Tastendrücke: callback({ type: 'down'|'up', code, name }) – gibt eine Abmelde-Funktion zurück
+      onKey: this.keys && ((callback) => {
+        const off = this.keys.on(callback);
+        entry.cleanups.push(off);
+        return off;
+      }),
       // Aktuelle Werte aller Module und eigenen Keywords, z. B. { divsoloduo: 'Gold II', … } – nur lesen
       values: () => Object.assign({}, ...this.bridge.latest.values()),
       // Twitch-Verbindung der App: user, scopes, token(), clientId, onChange()
@@ -155,24 +172,40 @@ class ModuleManager extends EventEmitter {
   // Einstellungen eines Moduls: Felder aus module.json → "settings", Werte in <dataDir>/<id>/settings.json
   async readSettings(id, manifest) {
     const defaults = Object.fromEntries((manifest.settings || []).map((f) => [f.key, f.default ?? null]));
+    let stored = {};
     try {
-      return { ...defaults, ...JSON.parse(await fs.readFile(path.join(this.dataDir, id, 'settings.json'), 'utf8')) };
+      stored = JSON.parse(await fs.readFile(path.join(this.dataDir, id, 'settings.json'), 'utf8'));
     } catch {
       return defaults;
     }
+    // Passt ein gespeicherter Wert nicht zum Feldtyp (z. B. von einer älteren App, die den Typ noch nicht kannte),
+    // gilt der Standard – sonst geht das Einstellungsfenster nicht auf
+    for (const field of manifest.settings || []) {
+      const listType = ['lines', 'hotkeys', 'dials', 'randomizers', 'blocks', 'extrakeys'].includes(field.type);
+      if (field.key in stored && listType && !Array.isArray(stored[field.key])) delete stored[field.key];
+    }
+    return { ...defaults, ...stored };
   }
 
-  async saveSettings(id, input) {
+  // persist: false = nur vorläufig übernehmen (Einstellungsfenster offen, noch nicht gespeichert) – das Modul arbeitet
+  // schon damit (z. B. Tastenkürzel neu belegt), die Datei bleibt aber, wie sie war
+  async saveSettings(id, input, { persist = true } = {}) {
     const entry = this.running.get(id);
     if (!entry) throw new Error('Modul ist nicht installiert.');
     const values = {};
     for (const field of entry.manifest.settings || []) {
       const raw = input?.[field.key];
-      if (field.type === 'lines' || field.type === 'hotkeys' || field.type === 'dials') {
+      if (field.type === 'lines' || field.type === 'hotkeys' || field.type === 'dials' || field.type === 'extrakeys') {
         values[field.key] = (Array.isArray(raw) ? raw : String(raw ?? '').split(/\r?\n/))
           .map((line) => String(line).trim()).filter(Boolean).slice(0, 200).map((line) => line.slice(0, 200));
       } else if (field.type === 'randomizers') {
         values[field.key] = cleanRandomizers(raw);
+      } else if (field.type === 'blocks') {
+        // Bot-Elemente (Editor → „Ventoview“); null = noch nie gespeichert (Modul übernimmt alte Einstellungen)
+        values[field.key] = Array.isArray(raw) ? cleanBlocks(raw) : null;
+      } else if (field.type === 'select') {
+        const allowed = (field.options || []).map(([v]) => String(v));
+        values[field.key] = allowed.includes(String(raw)) ? String(raw) : String(field.default ?? allowed[0] ?? '');
       } else if (field.type === 'toggle') {
         values[field.key] = Boolean(raw);
       } else if (field.type === 'number') {
@@ -182,8 +215,10 @@ class ModuleManager extends EventEmitter {
         values[field.key] = String(raw ?? '').slice(0, 1000);
       }
     }
-    await fs.writeFile(path.join(this.dataDir, id, 'settings.json'), JSON.stringify(values, null, 2));
+    if (persist) await fs.writeFile(path.join(this.dataDir, id, 'settings.json'), JSON.stringify(values, null, 2));
     entry.settings = values;
+    // Neue Generator-Namen können Konflikte mit anderen Modulen lösen (oder auslösen)
+    if (id === 'chatbot') this.syncLicense();
     try {
       entry.onSettings?.(values);
     } catch (err) {
@@ -271,12 +306,58 @@ class ModuleManager extends EventEmitter {
     }
   }
 
+  // Namen, die du selbst vergeben hast: Zufallsgeneratoren im Chat-Bot und eigene Keywords der App
+  userNames() {
+    const names = new Map(); // Name → wo
+    for (const b of this.running.get('chatbot')?.settings?.blocks || []) {
+      if (b?.type === 'generator' && b.name) names.set(b.name, `deinem Zufallsgenerator „${b.name}“ (Chat-Bot)`);
+      if (b?.type === 'counter' && b.name) names.set(`zaehler_${b.name}`, `deinem Zähler „${b.name}“ (Chat-Bot)`);
+    }
+    for (const k of this.config?.get('keywords') || []) if (k?.key) names.set(k.key, `deinem eigenen Keyword „${k.key}“ (App → Keywords)`);
+    return names;
+  }
+
+  // Feste Variablen aller Module (installiert und im Shop) → Name → Modulname. Eigene Keywords dürfen nicht so heißen.
+  moduleNames() {
+    const names = new Map();
+    const add = (m) => { for (const k of m?.keywords || []) if (k?.key && !names.has(k.key)) names.set(k.key, m.name || m.id); };
+    for (const entry of this.running.values()) add(entry.manifest);
+    for (const m of this.registry?.modules || []) add(m);
+    return names;
+  }
+
+  // Eigene Keywords, die (z. B. nach einem neuen Modul) schon anders vergeben sind → Name → Meldung
+  keywordConflicts() {
+    const taken = this.moduleNames();
+    const generators = this.userNames();
+    const out = {};
+    for (const k of this.config?.get('keywords') || []) {
+      if (!k?.key) continue;
+      if (taken.has(k.key)) out[k.key] = `{${k.key}} gibt es schon im Modul „${taken.get(k.key)}“ – bitte umbenennen.`;
+      else if (generators.has(k.key) && !generators.get(k.key).startsWith('deinem eigenen')) out[k.key] = `{${k.key}} heißt schon ${generators.get(k.key)} – bitte umbenennen.`;
+    }
+    return out;
+  }
+
+  // Meldung, wenn ein Modul eine Variable mitbringt, die schon vergeben ist – sonst null
+  conflictMessage(id, manifest) {
+    if (id === 'chatbot') return null;
+    const names = this.userNames();
+    const hit = (manifest.keywords || []).find((k) => names.has(k.key));
+    return hit ? `Du verwendest {${hit.key}} schon in ${names.get(hit.key)}. Das Modul „${manifest.name || id}“ kann deshalb nicht aktiviert werden – benenne zuerst ${names.get(hit.key).startsWith('deinem eigenen') ? 'das Keyword' : 'den Generator'} um.` : null;
+  }
+
   isInactive(id) {
     return (this.config?.get('inactive') || []).includes(id);
   }
 
   // Aktiv/inaktiv schalten – inaktive Module bleiben geladen, laufen aber nicht
   async setActive(id, active) {
+    if (active) {
+      const manifest = this.running.get(id)?.manifest || this.registry?.modules?.find((m) => m.id === id);
+      const conflict = manifest && this.conflictMessage(id, manifest);
+      if (conflict) throw new Error(conflict);
+    }
     const list = new Set(this.config.get('inactive') || []);
     if (active) list.delete(id);
     else list.add(id);
@@ -291,10 +372,14 @@ class ModuleManager extends EventEmitter {
   }
 
   // Alles, was das Konto freischaltet, ist automatisch da – fehlende Module still herunterladen
+  // Alles, was das Konto freischaltet, ist automatisch da und aktuell: fehlende Module still herunterladen,
+  // veraltete auf die Version der Webseite bringen (Einstellungen und Daten bleiben – sie liegen getrennt)
   async autoInstall() {
     if (!this.registry || !this.account?.state().connected) return;
     for (const info of this.registry.modules || []) {
-      if (this.running.has(info.id) || this.busy.has(info.id) || !this.account.allows(info.id) || !this.supports(info)) continue;
+      if (this.busy.has(info.id) || !this.account.allows(info.id) || !this.supports(info)) continue;
+      const current = this.running.get(info.id)?.manifest.version;
+      if (current && current === info.version) continue;
       await this.install(info.id).catch((err) => console.error(`Modul "${info.id}" konnte nicht geladen werden:`, err.message));
     }
   }
@@ -315,13 +400,24 @@ class ModuleManager extends EventEmitter {
   }
 
   // Nach einem neuen Lizenzschein: frei gewordene Module starten, gesperrte anhalten
-  async syncLicense() {
+  // Immer nur ein Abgleich gleichzeitig – zwei parallele würden dieselben Module gleichzeitig stoppen und starten,
+  // und ein Modul bliebe womöglich gesperrt, obwohl das Konto es freischaltet
+  syncLicense() {
+    this.licenseQueue = (this.licenseQueue || Promise.resolve()).then(() => this.applyLicense()).catch((err) => console.error('Lizenz-Abgleich:', err));
+    return this.licenseQueue;
+  }
+
+  async applyLicense() {
+    let changed = false;
     for (const [id, entry] of [...this.running.entries()]) {
-      if (entry.locked === !this.account?.allows(id)) continue;
+      // Freischaltung geändert – oder ein Namenskonflikt ist inzwischen gelöst (Generator/Keyword umbenannt)
+      const resolved = entry.conflict && !this.conflictMessage(id, entry.manifest);
+      if ((entry.locked === !this.account?.allows(id) && !resolved) || this.busy.has(id)) continue;
+      changed = true;
       await this.stop(id);
       await this.start(id).catch((err) => console.error(`Modul "${id}" konnte nicht gestartet werden:`, err));
     }
-    this.emit('change');
+    if (changed) this.emit('change');
   }
 
   // Felder und Werte der Modul-Einstellungen (für den Editor auf der Webseite)
@@ -340,7 +436,7 @@ class ModuleManager extends EventEmitter {
 
   state(id) {
     const entry = this.running.get(id);
-    return { installed: Boolean(entry), status: entry?.status ?? null };
+    return { installed: Boolean(entry), locked: Boolean(entry?.locked), status: entry?.status ?? null };
   }
 
   list() {
@@ -389,6 +485,67 @@ function cleanRandomizers(raw) {
         .filter((e) => e.text),
     };
   });
+}
+
+// Bot-Elemente des Chat-Bots: nur bekannte Arten und Felder, Texte begrenzt
+const BLOCK_TYPES = ['command', 'generator', 'random', 'timer', 'schedule', 'shortcut', 'counter', 'welcome', 'event'];
+const EVENT_KINDS = ['any', 'follow', 'sub', 'resub', 'giftsub', 'bits', 'raid', 'redeem'];
+function cleanBlocks(raw) {
+  const str = (v, max = 450) => String(v ?? '').slice(0, max);
+  const word = (v) => String(v ?? '').trim().split(/\s+/)[0].slice(0, 40);
+  // Mehrere Befehle mit Komma: „!rank, !elo“ – jeder nur ein Wort, höchstens 10
+  const words = (v) => String(v ?? '').split(',').map(word).filter(Boolean).slice(0, 10).join(', ');
+  const name = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30);
+  const num = (v, min, max) => (v === '' || v == null || !Number.isFinite(Number(v)) ? null : Math.max(min, Math.min(max, Number(v))));
+  const pick = (v, list, fallback) => (list.includes(v) ? v : fallback);
+  return raw.slice(0, 200).filter((b) => b && BLOCK_TYPES.includes(b.type)).map((b, i) => {
+    // gens: zugeordnete Zufallsgeneratoren (stehen im Editor darunter) – bei jedem Element möglich
+    const base = {
+      id: /^[\w-]{1,40}$/.test(b.id || '') ? b.id : `b${i}${Date.now().toString(36)}`, type: b.type, on: b.on !== false,
+      // Wann: true = nur live, false = immer, null = wie die Grundeinstellung des Bots
+      live: b.live == null ? null : Boolean(b.live),
+      gens: (Array.isArray(b.gens) ? b.gens : []).map((g) => String(g ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 30)).filter(Boolean).slice(0, 20),
+    };
+    switch (b.type) {
+      case 'command':
+        return {
+          ...base, trigger: words(b.trigger), mode: pick(b.mode, ['all', 'reply', 'whisper'], 'all'), text: str(b.text), cooldown: num(b.cooldown, 0, 86400),
+          gens: (Array.isArray(b.gens) ? b.gens : []).map(name).filter(Boolean).slice(0, 20),
+        };
+      case 'generator':
+        // Zufallsgenerator (Kind von Befehlen, gehört zu seinem Namen)
+        return {
+          id: base.id, type: 'generator', name: name(b.name),
+          entries: (Array.isArray(b.entries) ? b.entries : []).slice(0, 500)
+            .map((e) => ({ text: str(e?.text, 400).trim(), weight: num(e?.weight ?? 1, 0, 1000) ?? 1 })).filter((e) => e.text),
+        };
+      case 'random':
+        return {
+          ...base, name: name(b.name) || `zufall${i + 1}`, trigger: word(b.trigger), mode: pick(b.mode, ['all', 'reply', 'whisper', 'none'], 'reply'),
+          text: str(b.text || '{treffer}'), cooldown: num(b.cooldown, 0, 86400),
+          entries: (Array.isArray(b.entries) ? b.entries : []).slice(0, 500)
+            .map((e) => ({ text: str(e?.text, 400).trim(), weight: num(e?.weight ?? 1, 0, 1000) ?? 1 })).filter((e) => e.text),
+        };
+      case 'timer':
+        return { ...base, minutes: num(b.minutes, 1, 1440) ?? 20, text: str(b.text) };
+      case 'schedule':
+        return {
+          ...base, time: /^\d{1,2}:\d{2}$/.test(b.time || '') ? b.time.padStart(5, '0') : '20:00', text: str(b.text),
+          days: (Array.isArray(b.days) ? b.days : []).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6),
+        };
+      case 'shortcut':
+        return { ...base, shortcut: str(b.shortcut, 40).trim(), text: str(b.text) };
+      case 'counter':
+        return {
+          ...base, trigger: words(b.trigger), name: name(b.name) || `zaehler${i + 1}`, text: str(b.text || '{zaehler}'), who: pick(b.who, ['all', 'mods'], 'mods'),
+          step: num(b.step, 1, 1000) ?? 1, start: num(b.start, -1e6, 1e6) ?? 0, mode: pick(b.mode, ['all', 'reply'], 'all'), cooldown: num(b.cooldown, 0, 86400),
+        };
+      case 'welcome':
+        return { ...base, text: str(b.text || 'Willkommen {user}!'), mode: pick(b.mode, ['all', 'reply'], 'reply') };
+      default: // event
+        return { ...base, on: b.on !== false, kinds: (Array.isArray(b.kinds) ? b.kinds : ['any']).filter((k) => EVENT_KINDS.includes(k)), text: str(b.text) };
+    }
+  }).filter((b) => b.type !== 'generator' || b.name); // Generator ohne Namen gibt es nicht
 }
 
 module.exports = { ModuleManager };

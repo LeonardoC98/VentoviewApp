@@ -1,7 +1,7 @@
 {
   "name": "ventoview",
   "productName": "Ventoview",
-  "version": "1.7.0",
+  "version": "1.8.1",
   "description": "Ventoview – Overlays für deinen Stream",
   "author": "Ventoview",
   "private": true,
@@ -13,6 +13,10 @@
   },
   "dependencies": {
     "electron-updater": "6.8.10",
+    "gifenc": "1.0.3",
+    "mp4-muxer": "5.2.2",
+    "uiohook-napi": "1.5.4",
+    "webm-muxer": "5.1.4",
     "ws": "8.22.0"
   },
   "devDependencies": {
@@ -22,6 +26,9 @@
   "build": {
     "appId": "gg.ventoview.app",
     "productName": "Ventoview",
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
     "files": [
       "main.js",
       "preload.js",

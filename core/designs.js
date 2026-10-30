@@ -6,7 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const DESIGN_ID = /^[a-z0-9]{8,32}$/;
-const ASSET_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mp3|wav|ogg|m4a)$/;
+const ASSET_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mov|mp3|wav|ogg|m4a)$/;
 const MB = 1024 * 1024;
 const TYPES = {
   'image/png': { ext: 'png', kind: 'image', max: 10 * MB },
@@ -15,6 +15,7 @@ const TYPES = {
   'image/webp': { ext: 'webp', kind: 'image', max: 10 * MB },
   'video/mp4': { ext: 'mp4', kind: 'video', max: 200 * MB },
   'video/webm': { ext: 'webm', kind: 'video', max: 200 * MB },
+  'video/quicktime': { ext: 'mov', kind: 'video', max: 500 * MB },
   'audio/mpeg': { ext: 'mp3', kind: 'audio', max: 30 * MB },
   'audio/mp3': { ext: 'mp3', kind: 'audio', max: 30 * MB },
   'audio/wav': { ext: 'wav', kind: 'audio', max: 50 * MB },

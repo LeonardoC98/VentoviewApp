@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Ventoview Export</title>
+<script src="../node_modules/mp4-muxer/build/mp4-muxer.js"></script>
+<script src="vendor/webm-muxer.js"></script>
+</head>
+<body>
+<script>
+  // Kodiert die Bilder der App mit WebCodecs und packt sie mit dem Ton in eine Datei:
+  // MP4 = H.264 + AAC (sonst Opus).
+  // WebM = VP9 (sonst VP8) + Opus, mit Transparenz: Die Kodierer können kein Alpha – deshalb zwei Kodierer, einer für
+  // das Bild, einer für die Durchsichtigkeit (als Graustufenbild). Das Alpha-Bild kommt als BlockAdditions zu jedem
+  // Bild (so wie es WebM vorsieht); Browser und Ventoview zeigen das Video dann durchsichtig.
+  'use strict';
+  let muxer = null;
+  let video = null;
+  let alphaEnc = null;
+  let audio = null;
+  let failed = null;
+  let cfg = null;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const colorQ = [];
+  const alphaQ = [];
+
+  async function pickVideoConfig(width, height, fps, bitrate) {
+    const level = width * height > 1920 * 1088 ? '640033' : '640028';
+    for (const codec of [`avc1.${level}`, 'avc1.4D0033', 'avc1.42E033']) {
+      const conf = { codec, width, height, bitrate, framerate: fps, avc: { format: 'avc' } };
+      if ((await VideoEncoder.isConfigSupported(conf)).supported) return conf;
+    }
+    throw new Error('H.264 wird auf diesem PC nicht unterstützt');
+  }
+
+  async function pickWebmConfig(width, height, fps, bitrate) {
+    for (const codec of ['vp09.00.10.08', 'vp8']) {
+      const conf = { codec, width, height, bitrate, framerate: fps };
+      if ((await VideoEncoder.isConfigSupported(conf)).supported) return conf;
+    }
+    throw new Error('VP9/VP8 wird auf diesem PC nicht unterstützt');
+  }
+
+  async function pickAudioConfig(webm) {
+    for (const [codec, muxCodec] of webm ? [['opus', 'A_OPUS']] : [['mp4a.40.2', 'aac'], ['opus', 'opus']]) {
+      const conf = { codec, sampleRate: 48000, numberOfChannels: 2, bitrate: 192000 };
+      try {
+        if ((await AudioEncoder.isConfigSupported(conf)).supported) return { conf, muxCodec };
+      } catch {
+        // nächster
+      }
+    }
+    return null;
+  }
+
+  // EBML: Element = ID + Größe (8 Byte, vint) + Daten
+  function ebml(id, data) {
+    const size = new Uint8Array(8);
+    size[0] = 0x01;
+    let n = data.length;
+    for (let i = 7; i >= 1; i--) { size[i] = n & 0xff; n = Math.floor(n / 256); }
+    const out = new Uint8Array(id.length + 8 + data.length);
+    out.set(id, 0);
+    out.set(size, id.length);
+    out.set(data, id.length + 8);
+    return out;
+  }
+  // BlockMore { BlockAddID = 1, BlockAdditional = Alpha-Bild }
+  const blockMore = (alphaFrame) => {
+    const addId = Uint8Array.of(0xee, 0x81, 0x01);
+    const additional = ebml([0xa5], alphaFrame);
+    const inner = new Uint8Array(addId.length + additional.length);
+    inner.set(addId, 0);
+    inner.set(additional, addId.length);
+    return ebml([0xa6], inner);
+  };
+  const bytes = (chunk) => { const d = new Uint8Array(chunk.byteLength); chunk.copyTo(d); return d; };
+  // Bild und Alpha-Bild kommen getrennt aus ihren Kodierern – immer paarweise in die Datei
+  function pump() {
+    while (colorQ.length && alphaQ.length) {
+      const c = colorQ.shift();
+      const a = alphaQ.shift();
+      muxer.addVideoChunkRaw(c.data, c.type, c.timestamp, { ...(c.meta || {}), vvAlpha: blockMore(a) });
+    }
+  }
+
+  vvIpc.on('vv-init', async (c) => {
+    try {
+      cfg = c;
+      const webm = c.container === 'webm';
+      const vconf = webm ? await pickWebmConfig(c.width, c.height, c.fps, c.bitrate) : await pickVideoConfig(c.width, c.height, c.fps, c.bitrate);
+      const aconf = c.withAudio ? await pickAudioConfig(webm) : null;
+      muxer = webm
+        ? new WebMMuxer.Muxer({
+          target: new WebMMuxer.ArrayBufferTarget(),
+          video: { codec: vconf.codec === 'vp8' ? 'V_VP8' : 'V_VP9', width: c.width, height: c.height, frameRate: c.fps, alpha: Boolean(c.alpha) },
+          ...(aconf ? { audio: { codec: aconf.muxCodec, numberOfChannels: 2, sampleRate: 48000 } } : {}),
+          firstTimestampBehavior: 'offset',
+        })
+        : new Mp4Muxer.Muxer({
+          target: new Mp4Muxer.ArrayBufferTarget(),
+          video: { codec: 'avc', width: c.width, height: c.height, frameRate: c.fps },
+          ...(aconf ? { audio: { codec: aconf.muxCodec, numberOfChannels: 2, sampleRate: 48000 } } : {}),
+          fastStart: 'in-memory',
+          firstTimestampBehavior: 'offset',
+        });
+      const onError = (e) => { failed = e.message; };
+      if (webm && c.alpha) {
+        video = new VideoEncoder({ output: (chunk, meta) => { colorQ.push({ data: bytes(chunk), type: chunk.type, timestamp: chunk.timestamp, meta }); pump(); }, error: onError });
+        alphaEnc = new VideoEncoder({ output: (chunk) => { alphaQ.push(bytes(chunk)); pump(); }, error: onError });
+        alphaEnc.configure(vconf);
+      } else {
+        video = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: onError });
+      }
+      video.configure(vconf);
+      if (aconf) {
+        audio = new AudioEncoder({ output: (chunk, meta) => muxer.addAudioChunk(chunk, meta), error: onError });
+        audio.configure(aconf.conf);
+      }
+      vvIpc.send('vv-init-done', { ok: true, audio: Boolean(aconf) });
+    } catch (err) {
+      vvIpc.send('vv-init-done', { ok: false, error: err.message });
+    }
+  });
+
+  // WAV (16 Bit, Stereo, 48 kHz – so mischt die Overlay-Seite) → in Stücken an den Ton-Kodierer
+  vvIpc.on('vv-audio', async ({ wav }) => {
+    const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+    const frames = (wav.byteLength - 44) / 4;
+    const step = 1024;
+    for (let start = 0; start < frames; start += step) {
+      const n = Math.min(step, frames - start);
+      const planar = new Float32Array(n * 2);
+      for (let i = 0; i < n; i++) {
+        const o = 44 + (start + i) * 4;
+        planar[i] = view.getInt16(o, true) / 0x8000;
+        planar[n + i] = view.getInt16(o + 2, true) / 0x8000;
+      }
+      const data = new AudioData({ format: 'f32-planar', sampleRate: 48000, numberOfFrames: n, numberOfChannels: 2, timestamp: Math.round((start / 48000) * 1e6), data: planar });
+      audio.encode(data);
+      data.close();
+      while (audio.encodeQueueSize > 20) await sleep(2);
+    }
+    vvIpc.send('vv-audio-done', {});
+  });
+
+  // Durchsichtigkeit als Graustufenbild (I420: Helligkeit = Alpha, Farbe neutral)
+  function alphaFrame(data, width, height, init) {
+    const cw = Math.ceil(width / 2);
+    const ch = Math.ceil(height / 2);
+    const buf = new Uint8Array(width * height + cw * ch * 2);
+    for (let i = 0, p = 3; i < width * height; i++, p += 4) buf[i] = data[p];
+    buf.fill(128, width * height);
+    return new VideoFrame(buf, { format: 'I420', codedWidth: width, codedHeight: height, ...init });
+  }
+
+  vvIpc.on('vv-frame', async ({ index, data, width, height }) => {
+    try {
+      if (failed) throw new Error(failed);
+      const init = { timestamp: Math.round((index * 1e6) / cfg.fps), duration: Math.round(1e6 / cfg.fps) };
+      const key = { keyFrame: index % (cfg.fps * 2) === 0 };
+      const frame = new VideoFrame(data, { format: 'BGRA', codedWidth: width, codedHeight: height, ...init });
+      video.encode(frame, key);
+      frame.close();
+      if (alphaEnc) {
+        const a = alphaFrame(data, width, height, init);
+        alphaEnc.encode(a, key);
+        a.close();
+      }
+      while (video.encodeQueueSize > 4 || (alphaEnc && alphaEnc.encodeQueueSize > 4)) await sleep(2);
+      vvIpc.send('vv-frame-done', { index });
+    } catch (err) {
+      vvIpc.send('vv-frame-done', { index, error: err.message });
+    }
+  });
+
+  vvIpc.on('vv-finish', async () => {
+    try {
+      await video.flush();
+      if (alphaEnc) await alphaEnc.flush();
+      pump();
+      if (audio) await audio.flush();
+      if (failed) throw new Error(failed);
+      muxer.finalize();
+      vvIpc.send('vv-finished', { data: new Uint8Array(muxer.target.buffer) });
+    } catch (err) {
+      vvIpc.send('vv-finished', { error: err.message });
+    }
+  });
+</script>
+</body>
+</html>

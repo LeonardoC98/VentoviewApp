@@ -326,7 +326,8 @@ button.brand:hover { background: rgba(255, 255, 255, .06); }
 .rnd-head b { font-size: 14px; }
 .rnd-head small { flex: 1; }
 .rnd-body { display: grid; gap: 10px; padding: 12px; }
-.rnd-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.rnd-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } /* wie im Web: Befehl | Name, Pause | Antwort */
+.rnd-head { cursor: pointer; }
 .rnd-grid label, .rnd-text { display: grid; gap: 4px; font-size: 12px; color: var(--muted, #8b8b99); }
 .rnd-grid input, .rnd-grid select, .rnd-text input, .rnd-entry input { width: 100%; min-width: 0; }
 .rnd-entries { display: grid; gap: 4px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
@@ -336,3 +337,51 @@ button.brand:hover { background: rgba(255, 255, 255, .06); }
 .rnd-chance select { flex: 1; }
 .rnd-chance small { width: 54px; text-align: right; color: var(--muted, #8b8b99); font-size: 11.5px; }
 .rnd-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.blocks-hint { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; }
+
+.blocks-file { display: flex; gap: 6px; width: 100%; }
+
+/* Teilen: Vorlagen nach Modul filtern und suchen */
+.share-filter { display: grid; gap: 8px; margin: 10px 0 4px; }
+.share-filter input[type=search] { width: 100%; box-sizing: border-box; }
+.share-mods { display: flex; flex-wrap: wrap; gap: 6px; }
+.share-pick { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.share-pick span { flex: 1; }
+.check[hidden] { display: none; }
+#tab-share input[type=search], #tab-share .actions input[type=text] {
+  height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2, #1a1a22); color: var(--text); font: inherit;
+}
+#tab-share input[type=search]:focus, #tab-share .actions input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+/* Extra-Tasten aufnehmen */
+.extra-keys { display: grid; gap: 8px; }
+.extra-info { color: var(--muted); min-height: 1em; }
+/* Modul-Einstellungen wie im Web-Editor: Name über dem Feld, Hinweis darunter, Schalter mit Text daneben */
+.settings-form .setting.field { display: grid; gap: 6px; padding: 10px 0; border-bottom: 0; }
+.settings-form .field > label:not(.toggle) { color: var(--muted); font-size: 12px; font-weight: 600; }
+.settings-form .hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.settings-form select { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: inherit; }
+.settings-form select:focus { outline: none; border-color: var(--accent); }
+.settings-form .toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; }
+.settings-form .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.settings-form .tswitch { position: relative; flex: none; width: 32px; height: 18px; border-radius: 9px; background: var(--line); transition: background .15s; }
+.settings-form .tswitch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.settings-form .toggle input:checked + .tswitch { background: var(--accent); }
+.settings-form .toggle input:checked + .tswitch::after { transform: translateX(14px); }
+.settings-form .toggle input:focus-visible + .tswitch { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+/* Nur in der App: unten, abgesetzt durch eine feine Linie */
+.app-extras { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
+.app-extras-head { margin: 6px 0 2px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.rnd-many { display: grid; gap: 8px; padding: 10px; border: 1px dashed var(--line); border-radius: 8px; }
+.rnd-many textarea { width: 100%; box-sizing: border-box; }
+.rnd-many .toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: 13px; }
+.rnd-many .toggle input { position: absolute; opacity: 0; pointer-events: none; }
+/* Einstellungen eines Moduls: Titel mit × bleibt oben, Schließen/Speichern bleiben unten – nur die Felder scrollen */
+#moduleDialog { padding-bottom: 0; }
+#moduleDialog .dialog-head { position: sticky; top: 0; z-index: 3; margin: 0 -22px; padding: 14px 22px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+#moduleDialog .settings-form .actions { position: sticky; bottom: 0; z-index: 3; margin: 0 -22px; padding: 14px 22px 16px; background: var(--panel); border-top: 1px solid var(--line); }
+/* Keyword-Name schon vergeben (Modul, Generator, Zähler) */
+.kw-row.conflict input[name=key] { border-color: var(--error); background: rgba(248, 113, 113, .1); color: var(--error); }
+.kw-conflicts { margin: 0 0 10px; padding: 9px 12px; border-radius: 8px; background: rgba(248, 113, 113, .1); color: var(--error); font-size: 13px; }
+.tabs button.alert::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--error); vertical-align: middle; }

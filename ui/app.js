@@ -18,6 +18,9 @@ function h(tag, attrs = {}, ...children) {
 }
 
 function showError(message) {
+  // Ist ein Fenster (Dialog) offen, die Meldung darin zeigen – sonst läge sie dahinter
+  const host = document.querySelector('dialog[open]') || document.body;
+  if ($('toast').parentElement !== host) host.append($('toast'));
   $('toast').textContent = message;
   $('toast').hidden = false;
   clearTimeout(toastTimer);
@@ -126,17 +129,20 @@ function render() {
   dot.className = `dot ${bridge.error ? 'error' : 'ok'}`;
   $('serviceText').textContent = bridge.error || `Lokaler Dienst aktiv · Port ${bridge.port}`;
 
-  $('installed').replaceChildren(...(installed.length
-    ? installed.map(installedCard)
+  // Oben nur, was freigeschaltet ist – gesperrte Module (z. B. Abo beendet) stehen unten bei „Module entdecken“
+  const mine = installed.filter((m) => !m.locked);
+  const locked = installed.filter((m) => m.locked);
+  $('installed').replaceChildren(...(mine.length
+    ? mine.map(installedCard)
     : [h('div', { class: 'empty' }, state.account?.connected ? 'Module werden geladen …' : 'Verbinde die App mit deinem Konto (Einstellungen) – deine Module erscheinen dann von selbst.')]));
 
   let discover;
   if (registryError) {
     discover = [h('div', { class: 'empty error' }, registryError)];
-  } else if (!available.length) {
+  } else if (!available.length && !locked.length) {
     discover = [h('div', { class: 'empty' }, installed.length ? 'Du hast schon alle Module.' : 'Lade Module …')];
   } else {
-    discover = available.map(availableCard);
+    discover = [...locked, ...available].map(availableCard);
   }
   $('available').replaceChildren(...discover);
 
@@ -166,9 +172,19 @@ async function renderSharing() {
   if (!res.ok) return showError(res.error);
   const { designs, folders, shareDir } = res.result;
   $('shareDir').textContent = shareDir;
+  // Auswahl beim Neuzeichnen behalten; Filter (Modul, Suche) blenden nur aus – Angehakte bleiben angehakt
+  const checked = new Set([...$('shareDesigns').querySelectorAll('input:checked')].map((el) => el.value));
+  const modName = (id) => [...(state?.installed || []), ...(state?.available || [])].find((m) => m.id === id)?.name || id;
   $('shareDesigns').replaceChildren(...(designs.length
-    ? designs.map((d) => h('label', { class: 'check' }, h('input', { type: 'checkbox', value: d.id }), h('span', {}, d.name || 'Ohne Namen'), h('small', {}, (d.modules || []).join(', '))))
+    ? designs.map((d) => h('label', { class: 'check', 'data-mods': (d.modules || []).join(','), 'data-text': `${d.name || ''} ${(d.modules || []).map(modName).join(' ')}`.toLowerCase() },
+      h('input', { type: 'checkbox', value: d.id, checked: checked.has(d.id) }), h('span', {}, d.name || 'Ohne Namen'), h('small', {}, (d.modules || []).map(modName).join(', '))))
     : [h('small', {}, 'Noch keine gespeicherten Vorlagen – im Editor auf der Webseite speichern.')]));
+  const used = [...new Set(designs.flatMap((d) => d.modules || []))].sort((a, b) => modName(a).localeCompare(modName(b), 'de'));
+  $('shareMods').replaceChildren(...['', ...used].map((id) => h('button', {
+    type: 'button', class: `chip${shareFilter.module === id ? '' : ' added'}`,
+    onclick: () => { shareFilter.module = id; renderSharing(); },
+  }, id ? modName(id) : 'Alle Module')));
+  applyShareFilter();
   $('shareFolders').replaceChildren(...(folders.length
     ? folders.map((f) => h('div', { class: 'row' },
       h('span', {}, h('strong', {}, f.name), h('small', {}, [f.designs.join(', ') || 'keine Vorlagen', f.home ? ' · Home' : '', f.media ? ` · ${f.media} Medien` : ''].join(''))),
@@ -176,6 +192,30 @@ async function renderSharing() {
     ))
     : [h('div', { class: 'row last' }, h('small', {}, 'Hier liegt noch nichts. Leg einen Export-Ordner in den Teilen-Ordner.'))]));
 }
+
+const shareFilter = { module: '', q: '' };
+
+function applyShareFilter() {
+  const q = shareFilter.q.trim().toLowerCase();
+  const rows = [...$('shareDesigns').querySelectorAll('label.check')];
+  for (const row of rows) {
+    const mods = row.dataset.mods.split(',');
+    row.hidden = Boolean((shareFilter.module && !mods.includes(shareFilter.module)) || (q && !row.dataset.text.includes(q)));
+  }
+  const n = rows.filter((r) => r.querySelector('input').checked).length;
+  $('shareCount').textContent = `${rows.filter((r) => !r.hidden).length} von ${rows.length} sichtbar · ${n} ausgewählt`;
+}
+
+$('shareSearch').addEventListener('input', (e) => { shareFilter.q = e.target.value; applyShareFilter(); });
+$('shareDesigns').addEventListener('change', applyShareFilter);
+$('shareAll').addEventListener('click', () => {
+  $('shareDesigns').querySelectorAll('label.check:not([hidden]) input').forEach((el) => { el.checked = true; });
+  applyShareFilter();
+});
+$('shareNone').addEventListener('click', () => {
+  $('shareDesigns').querySelectorAll('input').forEach((el) => { el.checked = false; });
+  applyShareFilter();
+});
 
 async function importShare(dir) {
   const res = await run('shareImport', dir);
@@ -299,50 +339,133 @@ function openModuleSettings(id) {
   if (!mod) return;
   settingsModule = id;
   const values = mod.settingsValues || {};
+  // Aufbau wie im Web-Editor (Reiter „Einstellungen“): gleiche Reihenfolge, gleiche Felder, Hinweis unter dem Feld.
+  // Was es nur in der App gibt (Tasten aufnehmen, Bot exportieren …), steht ganz unten hinter einer feinen Linie.
+  const help = (field) => (field.help ? h('p', { class: 'hint' }, field.help) : null);
+  const label = (field) => h('label', {}, field.label);
+  const extras = [];
   const fields = mod.settings.map((field) => {
-    let control;
-    if (field.type === 'hotkeys') {
-      control = hotkeyEditor(field, values[field.key] || []);
-    } else if (field.type === 'randomizers') {
-      control = randomizerEditor(field, values[field.key] || []);
-    } else if (field.type === 'dials') {
-      control = dialEditor(field, values[field.key] || []);
-    } else if (field.type === 'lines') {
-      control = h('textarea', { name: field.key, rows: 6, spellcheck: 'false', placeholder: field.placeholder || '' }, (values[field.key] || []).join('\n'));
-    } else if (field.type === 'toggle') {
-      control = h('span', { class: 'switch' }, h('input', { type: 'checkbox', name: field.key, checked: values[field.key] ? true : null }), h('span'));
-    } else {
-      control = h('input', { type: field.type === 'number' ? 'number' : 'text', name: field.key, value: values[field.key] ?? '' });
+    const row = (...children) => h('div', { class: 'setting field', 'data-key': field.key }, ...children);
+    if (field.type === 'toggle') {
+      return row(h('label', { class: 'toggle' },
+        h('input', { type: 'checkbox', name: field.key, checked: (values[field.key] ?? field.default) ? true : null, onchange: () => preview() }),
+        h('span', { class: 'tswitch' }), field.label), help(field));
     }
-    return h('div', { class: `setting${field.type === 'toggle' ? ' inline' : ''}`, 'data-key': field.key },
-      h('div', { class: 'setting-label' }, h('strong', {}, field.label), field.help ? h('small', {}, field.help) : null),
-      control,
-      field.type === 'lines' ? h('div', { class: 'suggestions' }) : null,
-    );
+    if (field.type === 'select') {
+      return row(label(field),
+        h('select', { name: field.key, onchange: () => preview() }, ...(field.options || []).map(([v, text]) => h('option', { value: v, selected: String(values[field.key] ?? field.default) === String(v) ? true : null }, text))),
+        help(field));
+    }
+    if (field.type === 'lines') {
+      return row(label(field),
+        h('textarea', { name: field.key, rows: 4, spellcheck: 'false', placeholder: field.placeholder || '' }, (values[field.key] || []).join('\n')),
+        help(field), h('div', { class: 'suggestions' }));
+    }
+    if (field.type === 'randomizers') return row(label(field), randomizerEditor(field, values[field.key] || []), help(field));
+    if (field.type === 'blocks') {
+      // Wie im Web: Hinweis + Weg in den Editor. Export/Import gibt es nur hier → unten bei „Nur in der App“
+      const count = Array.isArray(values[field.key]) ? values[field.key].length : null;
+      extras.push(h('div', { class: 'setting field' }, h('label', {}, `${field.label}: Datei`),
+        h('div', { class: 'blocks-file' },
+          h('button', {
+            type: 'button', class: 'btn small', title: 'Alle Bot-Elemente und Bot-Einstellungen als .vviewbot-Datei speichern (ohne deinen Kanal)',
+            onclick: async () => { const res = await run('exportBot'); if (res.ok && res.result) showError(`Exportiert: ${res.result.blocks} Elemente.`); },
+          }, 'Exportieren …'),
+          h('button', {
+            type: 'button', class: 'btn small ghost', title: 'Bot aus einer .vviewbot-Datei laden – ersetzt alle Bot-Elemente',
+            onclick: async () => {
+              const res = await run('importBot');
+              if (res.ok && res.result) { $('moduleDialog').close(); showError(`Importiert: ${res.result.blocks} Elemente. Im Editor die Seite neu laden.`); }
+            },
+          }, 'Importieren …')),
+        h('input', { type: 'hidden', name: field.key, value: JSON.stringify(values[field.key] ?? null) })));
+      return row(label(field),
+        h('p', { class: 'hint' }, `${count === null ? '' : `${count} Elemente eingerichtet. `}Befehle, Zufallsgeneratoren, Timer, Uhrzeiten und mehr baust du im Chat-Bot-Editor im Tab „Ventoview-Bot“.`),
+        h('div', {}, h('button', { type: 'button', class: 'btn small', onclick: () => { $('moduleDialog').close(); run('openModule', mod.id); } }, 'Im Chat-Bot-Editor öffnen')));
+    }
+    if (field.type === 'hotkeys' || field.type === 'dials' || field.type === 'extrakeys') {
+      // Wie im Web nur die Anzahl – aufnehmen geht unten (die App hört Tastatur, Gamepad und MIDI)
+      const editor = field.type === 'hotkeys' ? hotkeyEditor(field, values[field.key] || [])
+        : field.type === 'dials' ? dialEditor(field, values[field.key] || []) : extraKeyEditor(field, values[field.key] || []);
+      extras.push(h('div', { class: 'setting field', 'data-key': field.key }, label(field), editor));
+      const count = (values[field.key] || []).length;
+      return row(label(field), h('p', { class: 'hint' }, `${count ? `${count} eingerichtet. ` : ''}Aufnehmen: unten bei „Nur in der App“.`), help(field));
+    }
+    return row(label(field),
+      h('input', { type: field.type === 'number' ? 'number' : 'text', name: field.key, value: values[field.key] ?? '', placeholder: field.placeholder || '' }),
+      help(field));
   });
   const message = h('span', { class: 'message', role: 'status' });
   const form = h('form', { class: 'settings-form' },
     ...fields,
+    extras.length ? h('div', { class: 'app-extras' }, h('p', { class: 'app-extras-head' }, 'Nur in der App'), ...extras) : null,
     h('div', { class: 'actions' },
       message,
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => $('moduleDialog').close() }, 'Abbrechen'),
+      h('button', { type: 'button', class: 'btn ghost', onclick: () => closeSettings() }, 'Schließen'),
       h('button', { type: 'submit', class: 'btn primary' }, 'Speichern'),
     ),
   );
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  // Jede Änderung gilt sofort vorläufig (das Modul arbeitet schon damit – z. B. ein gelöschtes Tastenkürzel ist gleich
+  // frei für ein neues), gespeichert wird erst mit „Speichern“. Schließen ohne Speichern nimmt alles zurück.
+  const collect = () => {
     const input = {};
     for (const field of mod.settings) {
       const el = form.querySelector(`[name="${field.key}"]`);
-      input[field.key] = field.type === 'toggle' ? el.checked : ['hotkeys', 'dials', 'randomizers'].includes(field.type) ? JSON.parse(el.value) : el.value;
+      if (!el) continue;
+      input[field.key] = field.type === 'toggle' ? el.checked : ['hotkeys', 'dials', 'randomizers', 'blocks', 'extrakeys'].includes(field.type) ? JSON.parse(el.value) : el.value;
     }
+    return input;
+  };
+  let saved = JSON.parse(JSON.stringify(values)); // Stand in der Datei
+  let dirty = false;
+  async function preview() {
+    dirty = true;
+    message.classList.remove('error');
+    message.textContent = 'Noch nicht gespeichert';
+    const res = await (api.previewModuleSettings || api.saveModuleSettings)(id, collect());
+    if (!res.ok) {
+      message.classList.add('error');
+      message.textContent = res.error;
+    }
+  }
+  async function save() {
+    const input = collect();
     const res = await api.saveModuleSettings(id, input);
     message.classList.toggle('error', !res.ok);
-    message.textContent = res.ok ? 'Gespeichert.' : res.error;
-    if (res.ok) setTimeout(() => $('moduleDialog').close(), 500);
+    message.textContent = res.ok ? 'Gespeichert – gilt für alle Overlays dieses Moduls.' : res.error;
+    if (!res.ok) return;
+    saved = input;
+    dirty = false;
+    setTimeout(() => $('moduleDialog').close(), 500);
+  }
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    save();
   });
+  // Tastenkürzel, Extra-Tasten, Regler: ihre Listen melden jede Änderung (verstecktes Feld) → vorläufig übernehmen
+  form.addEventListener('vv-change', () => preview());
+  // Texte: erst mit „Speichern“ – aber als ungespeichert merken
+  form.addEventListener('input', (event) => {
+    if (!event.target.matches('input[type=text], input[type=number], textarea')) return;
+    dirty = true;
+    message.classList.remove('error');
+    message.textContent = 'Noch nicht gespeichert';
+  });
+  // Schließen (×, Schließen, Esc) mit Ungespeichertem: nachfragen, sonst zurück auf den gespeicherten Stand
+  $('moduleDialog').oncancel = (event) => {
+    if (dirty && !confirm('Änderungen nicht gespeichert – verwerfen?')) event.preventDefault();
+  };
+  $('moduleDialog').onclose = () => {
+    $('moduleDialog').onclose = null;
+    if (dirty) api.previewModuleSettings?.(id, saved);
+    dirty = false;
+  };
+  function closeSettings() {
+    if (dirty && !confirm('Änderungen nicht gespeichert – verwerfen?')) return;
+    $('moduleDialog').close();
+  }
   $('moduleDialog').replaceChildren(
-    h('div', { class: 'dialog-head' }, h('h3', {}, `${mod.name} – Einstellungen`), h('button', { type: 'button', class: 'btn ghost', onclick: () => $('moduleDialog').close() }, '×')),
+    h('div', { class: 'dialog-head' }, h('h3', {}, `${mod.name} – Einstellungen`), h('button', { type: 'button', class: 'btn ghost', onclick: () => closeSettings() }, '×')),
     form,
   );
   $('moduleDialog').showModal();
@@ -403,6 +526,55 @@ async function recordInput(button, kind) {
   return res.result;
 }
 
+// Extra-Tasten (Basic → Tasten-Anzeige): Zusatztasten an Maus oder Tastatur, die Ventoview sonst nicht kennt.
+// „+ Extra aufnehmen“ wartet auf die nächste Taste; ist sie eine normale, gibt es nur einen Hinweis.
+// Gespeichert als Zeilen „maus:4 = Maus vor“ bzw. „key:57416 = Makro 1“.
+function extraKeyEditor(field, lines) {
+  const list = lines.map((line) => {
+    const i = line.indexOf('=');
+    return i > 0 ? { id: line.slice(0, i).trim(), name: line.slice(i + 1).trim() } : null;
+  }).filter((x) => x && /^(maus|key):\d+$/.test(x.id) && x.name);
+  const hidden = h('input', { type: 'hidden', name: field.key });
+  const rows = h('div', { class: 'hotkeys' });
+  const info = h('small', { class: 'extra-info' });
+  const nameInput = h('input', { type: 'text', placeholder: 'Name (optional), z. B. Daumentaste', maxlength: '30' });
+  const button = h('button', { type: 'button', class: 'btn primary' }, '+ Extra aufnehmen');
+  const sync = () => {
+    hidden.value = JSON.stringify(list.map((x) => `${x.id} = ${x.name}`));
+    if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true })); // Fenster übernimmt vorläufig
+    rows.replaceChildren(...(list.length ? list.map((x) => h('div', { class: 'hotkey' },
+      h('b', {}, x.name), h('kbd', {}, x.id.startsWith('maus:') ? `Maustaste ${x.id.slice(5)}` : `Taste ${x.id.slice(4)}`),
+      h('button', { type: 'button', class: 'btn ghost small', title: 'Entfernen', onclick: () => { list.splice(list.indexOf(x), 1); sync(); } }, '×'),
+    )) : [h('div', { class: 'empty small' }, 'Keine Extra-Tasten.')]));
+  };
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Drücke jetzt die Taste …';
+    info.textContent = 'Taste an Maus oder Tastatur drücken (10 Sekunden).';
+    const res = await api.captureKey();
+    button.disabled = false;
+    button.textContent = '+ Extra aufnehmen';
+    if (!res.ok) { info.textContent = res.error; return; }
+    const key = res.result;
+    const id = `${key.device}:${key.code}`;
+    if (key.known) {
+      info.textContent = `„${key.name}“ erkennt Ventoview schon von selbst – nichts Neues registriert.`;
+      return;
+    }
+    if (list.some((x) => x.id === id)) {
+      info.textContent = `Diese Taste ist schon als „${list.find((x) => x.id === id).name}“ eingetragen.`;
+      return;
+    }
+    const name = (nameInput.value.trim().replace(/=/g, '') || (key.device === 'maus' ? `Maus ${key.code}` : `Taste ${key.code}`)).slice(0, 30);
+    nameInput.value = '';
+    list.push({ id, name });
+    info.textContent = `„${name}“ hinzugefügt – Speichern nicht vergessen.`;
+    sync();
+  });
+  sync();
+  return h('div', { class: 'extra-keys' }, rows, h('div', { class: 'hotkey-add' }, nameInput, button), info, hidden);
+}
+
 function hotkeyEditor(field, lines) {
   const list = lines.map((line) => {
     const i = line.indexOf('=');
@@ -429,6 +601,7 @@ function hotkeyEditor(field, lines) {
 
   const sync = () => {
     hidden.value = JSON.stringify(list.map((x) => `${x.name} = ${x.keys}`));
+    if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true })); // Fenster übernimmt vorläufig
     rows.replaceChildren(...(list.length ? list.map((x) => h('div', { class: 'hotkey' },
       h('b', {}, x.name), h('kbd', {}, /^(pad|midi):/.test(x.keys) ? inputLabel(x.keys) : x.keys),
       h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: () => { list.splice(list.indexOf(x), 1); sync(); } }, '×'),
@@ -471,10 +644,11 @@ const RANDOM_MODES = [['reply', 'Antwort an den Nutzer'], ['all', 'An alle'], ['
 const CHANCES = [[0, 'Nie'], [0.1, 'Sehr selten'], [0.33, 'Selten'], [1, 'Normal'], [3, 'Häufig'], [10, 'Sehr häufig']];
 
 function randomizerEditor(field, initial) {
-  const list = JSON.parse(JSON.stringify(initial));
+  const list = JSON.parse(JSON.stringify(Array.isArray(initial) ? initial : field.default || []));
   const hidden = h('input', { type: 'hidden', name: field.key });
   const wrap = h('div', { class: 'randomizers' });
   const open = new Set(list.length === 1 ? [0] : []);
+  const many = new Set(); // Zufallsgeneratoren mit offenem „Mehrere …“
   const sync = () => { hidden.value = JSON.stringify(list); };
 
   const draw = () => {
@@ -488,22 +662,23 @@ function randomizerEditor(field, initial) {
       });
       const isOpen = open.has(index);
       return h('div', { class: 'rnd' },
-        h('div', { class: 'rnd-head' },
-          h('button', { type: 'button', class: 'btn ghost small', onclick: () => { if (isOpen) open.delete(index); else open.add(index); draw(); } }, isOpen ? '▾' : '▸'),
+        // Aufbau wie im Web-Editor (Einstellungen → Zufallsgeneratoren)
+        h('div', { class: 'rnd-head', onclick: () => { if (isOpen) open.delete(index); else open.add(index); draw(); } },
+          h('span', {}, isOpen ? '▾' : '▸'),
           h('b', {}, `🎲 ${r.command || r.name}`),
           h('small', { class: 'muted' }, `${r.entries.length} Einträge · {zufall_${r.name}}`),
-          h('button', { type: 'button', class: 'btn ghost small', title: 'Zufallsgenerator löschen', onclick: () => { if (confirm(`„${r.command || r.name}“ löschen?`)) { list.splice(index, 1); open.delete(index); draw(); } } }, '×')),
+          h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: (ev) => { ev.stopPropagation(); if (confirm(`„${r.command || r.name}“ löschen?`)) { list.splice(index, 1); open.delete(index); draw(); } } }, '×')),
         isOpen ? h('div', { class: 'rnd-body' },
           h('div', { class: 'rnd-grid' },
             h('label', {}, 'Befehl', input('command', { placeholder: '!lucky' })),
-            h('label', {}, 'Name (Variable)', input('name', { placeholder: 'lucky', title: 'Ergibt {zufall_name} – auch in anderen Befehlen, Timern und Tastenkürzeln nutzbar' })),
-            h('label', {}, 'Abklingzeit (s)', input('cooldown', { type: 'number', min: 0, placeholder: 'Standard' })),
-            h('label', {}, 'Antwort-Art', h('select', { onchange: (e) => { r.mode = e.target.value; sync(); } },
+            h('label', {}, 'Name', input('name', { placeholder: 'lucky' })),
+            h('label', {}, 'Pause s', input('cooldown', { type: 'number', min: 0, placeholder: 'Std.' })),
+            h('label', {}, 'Antwort', h('select', { onchange: (e) => { r.mode = e.target.value; sync(); } },
               ...RANDOM_MODES.map(([value, label]) => h('option', { value, selected: r.mode === value ? true : null }, label)))),
           ),
-          h('label', { class: 'rnd-text' }, 'Antworttext – {treffer} ist der gezogene Eintrag, dazu {user} und alle Variablen', input('text', { placeholder: '🍀 {treffer}' })),
+          h('label', { class: 'rnd-text' }, 'Text', input('text', { placeholder: '🍀 {treffer}' })),
+          h('p', { class: 'hint' }, `{treffer} = gezogener Eintrag, dazu {user} und alle Variablen. Überall sonst: {zufall_${r.name}}.`),
           h('div', { class: 'rnd-entries' },
-            h('div', { class: 'rnd-entry head' }, h('span', {}, 'Eintrag'), h('span', {}, 'Chance'), h('span', {}, '')),
             ...r.entries.map((e, i) => h('div', { class: 'rnd-entry' },
               h('input', { type: 'text', value: e.text, oninput: (ev) => { e.text = ev.target.value; sync(); } }),
               h('span', { class: 'rnd-chance' },
@@ -518,20 +693,35 @@ function randomizerEditor(field, initial) {
           h('div', { class: 'rnd-actions' },
             h('button', { type: 'button', class: 'btn small', onclick: () => { r.entries.push({ text: '', weight: 1 }); draw(); wrap.querySelector('.rnd-entry:last-child input')?.focus(); } }, '+ Eintrag'),
             h('button', {
-              type: 'button', class: 'btn small', title: 'Viele Einträge auf einmal: eine Zeile pro Eintrag',
-              onclick: () => {
-                const text = prompt('Einträge einfügen – einer pro Zeile (kommen zu den vorhandenen dazu):');
-                if (!text) return;
-                for (const line of text.split(/\r?\n/)) if (line.trim()) r.entries.push({ text: line.trim(), weight: 1 });
-                draw();
-              },
-            }, 'Mehrere einfügen …'),
-            h('button', { type: 'button', class: 'btn small ghost', onclick: () => { r.entries.forEach((e) => { e.weight = 1; }); draw(); } }, 'Alle gleich oft'),
+              type: 'button', class: 'btn small', title: 'Viele Einträge auf einmal',
+              onclick: () => { if (many.has(index)) many.delete(index); else many.add(index); draw(); },
+            }, 'Mehrere …'),
+            h('button', { type: 'button', class: 'btn small ghost', onclick: () => { r.entries.forEach((e) => { e.weight = 1; }); draw(); } }, 'Alle gleich'),
           ),
+          // Mehrere Einträge auf einmal – wie im Web: neue Zeile trennt immer, Komma auch (abschaltbar für Sprüche mit Komma)
+          many.has(index) ? (() => {
+            const area = h('textarea', { rows: 6, placeholder: 'Ahri, Teemo, Jinx\noder ein Eintrag pro Zeile' });
+            const commas = h('input', { type: 'checkbox', checked: true });
+            return h('div', { class: 'rnd-many' },
+              h('p', { class: 'hint' }, 'Einfach einfügen oder tippen. Neue Zeile trennt immer, Komma auch – außer du schaltest es ab (für Sprüche mit Komma).'),
+              area,
+              h('label', { class: 'toggle' }, commas, h('span', { class: 'tswitch' }), 'Komma trennt Einträge'),
+              h('div', { class: 'rnd-actions' },
+                h('button', { type: 'button', class: 'btn small ghost', onclick: () => { many.delete(index); draw(); } }, 'Abbrechen'),
+                h('button', {
+                  type: 'button', class: 'btn small primary',
+                  onclick: () => {
+                    const texts = area.value.split(commas.checked ? /[\r\n,]+/ : /\r?\n/).map((t) => t.trim()).filter(Boolean);
+                    r.entries.push(...texts.map((text) => ({ text, weight: 1 })));
+                    many.delete(index);
+                    draw();
+                  },
+                }, 'Einfügen')));
+          })() : null,
         ) : null,
       );
     }), h('button', {
-      type: 'button', class: 'btn',
+      type: 'button', class: 'btn small',
       onclick: () => {
         list.push({ name: `zufall${list.length + 1}`, command: '', cooldown: null, mode: 'reply', text: '🎲 {treffer}', entries: [] });
         open.add(list.length - 1);
@@ -555,6 +745,7 @@ function dialEditor(field, lines) {
   const rows = h('div', { class: 'hotkeys' });
   const sync = () => {
     hidden.value = JSON.stringify(Object.entries(map).map(([n, id]) => `${n} = ${id}`));
+    if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true })); // Fenster übernimmt vorläufig
     rows.replaceChildren(...Array.from({ length: 8 }, (_, k) => {
       const n = k + 1;
       const assign = h('button', { type: 'button', class: 'btn small' }, map[n] ? 'Ändern' : 'Zuweisen');
@@ -657,8 +848,17 @@ function keywordRow(entry = { source: 'text' }) {
     keyInput, sourceSelect, target,
     h('span', { class: 'kw-interval' }, interval, h('small', {}, 's')),
     preview,
-    h('button', { class: 'btn danger', type: 'button', title: 'Entfernen', onclick: () => row.remove() }, '×'),
+    h('button', {
+      class: 'btn danger', type: 'button', title: 'Entfernen',
+      onclick: async () => {
+        const saved = row.dataset.saved;
+        const used = saved ? (await api.keywordUsage(saved)).result || [] : [];
+        if (used.length && !confirm(`{${saved}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`)) return;
+        row.remove();
+      },
+    }, '×'),
   );
+  keyInput.addEventListener('input', updateKeywordPreviews);
 
   // Eingabefelder passend zur Quelle aufbauen
   const buildTarget = (src) => {
@@ -699,6 +899,14 @@ function updateKeywordPreviews() {
     const preview = row.querySelector('.kw-preview');
     const saved = row.dataset.saved;
     const current = row.querySelector('[name=key]').value.trim().toLowerCase();
+    const taken = keywordTaken(current);
+    row.classList.toggle('conflict', Boolean(taken));
+    if (taken) {
+      preview.textContent = taken;
+      preview.className = 'kw-preview error';
+      preview.title = taken;
+      continue;
+    }
     if (!saved || saved !== current) {
       preview.textContent = 'Speichern zum Testen';
       preview.className = 'kw-preview muted';
@@ -720,6 +928,24 @@ function updateKeywordPreviews() {
       preview.title = preview.textContent;
     }
   }
+}
+
+// Meldung, wenn ein Name schon vergeben ist – sonst ''
+function keywordTaken(key) {
+  if (!key) return '';
+  if (state.keywordConflicts?.[key]) return state.keywordConflicts[key];
+  const mod = state.reservedNames?.[key];
+  return mod ? `{${key}} gibt es schon im Modul „${mod}“ – bitte anders nennen.` : '';
+}
+
+const usageText = (list) => list.map((u) => `• ${u.where}${u.count > 1 ? ` (${u.count}×)` : ''}`).join('\n');
+
+// Hinweis oben im Tab, wenn ein (neu installiertes) Modul einen deiner Namen belegt
+function renderKeywordConflicts() {
+  const list = Object.values(state.keywordConflicts || {});
+  $('keywordConflicts').hidden = !list.length;
+  $('keywordConflicts').textContent = list.length ? `Namenskonflikt: ${list.join(' ')}` : '';
+  document.querySelector('.tabs button[data-tab=keywords]')?.classList.toggle('alert', list.length > 0);
 }
 
 function fillKeywords() {
@@ -755,7 +981,17 @@ $('addKeyword').addEventListener('click', () => {
 
 $('keywordsForm').addEventListener('submit', async (event) => {
   event.preventDefault();
-  const list = [...$('keywordRows').children].map((row) => {
+  const rows = [...$('keywordRows').children];
+  // Umbenannt: Name geändert, der alte war gespeichert → überall mitziehen (nach Rückfrage, wenn er benutzt wird)
+  const renames = rows.map((row) => ({ from: row.dataset.saved, to: row.querySelector('[name=key]').value.trim().toLowerCase() }))
+    .filter((r) => r.from && r.to && r.from !== r.to);
+  const notes = [];
+  for (const r of renames) {
+    const used = (await api.keywordUsage(r.from)).result || [];
+    if (used.length) notes.push(`{${r.from}} → {${r.to}}:\n${usageText(used)}`);
+  }
+  if (notes.length && !confirm(`Umbenannte Keywords werden benutzt – die Umbenennung wird dort übernommen:\n\n${notes.join('\n\n')}\n\nWeiter?`)) return;
+  const list = rows.map((row) => {
     const source = row.querySelector('[name=source]').value;
     const target = row.querySelector('[name=target]').value;
     return {
@@ -767,10 +1003,13 @@ $('keywordsForm').addEventListener('submit', async (event) => {
       interval: row.querySelector('[name=interval]').value,
     };
   });
-  const res = await api.saveKeywords(list);
+  const res = await api.saveKeywords(list, renames);
   if (res.ok) fillKeywords();
   $('keywordsMessage').classList.toggle('error', !res.ok);
-  $('keywordsMessage').textContent = res.ok ? 'Gespeichert – dynamische Werte werden jetzt gelesen.' : res.error;
+  const changed = res.result?.changed;
+  $('keywordsMessage').textContent = res.ok
+    ? `Gespeichert – dynamische Werte werden jetzt gelesen.${changed ? ` Umbenennung an ${changed} Stelle${changed === 1 ? '' : 'n'} übernommen.` : ''}`
+    : res.error;
 });
 
 renderExamples();
@@ -791,6 +1030,11 @@ document.querySelectorAll('.tabs button').forEach((tab) => {
 $('refreshBtn').addEventListener('click', () => run('refresh'));
 $('brandBtn').addEventListener('click', () => run('openHome'));
 $('addExtension').addEventListener('click', () => run('installExtension'));
+$('saveBackupBtn').addEventListener('click', async () => {
+  const res = await run('saveBackup');
+  if (res.ok && res.result) showError(`Gesichert: ${res.result.files} Dateien (${(res.result.bytes / 1048576).toFixed(1)} MB).`);
+});
+$('loadBackupBtn').addEventListener('click', () => run('loadBackup'));
 $('openShareDir').addEventListener('click', () => run('shareOpen'));
 $('pickShare').addEventListener('click', () => importShare(null));
 $('exportBtn').addEventListener('click', async () => {
@@ -812,12 +1056,19 @@ $('settingsForm').addEventListener('submit', async (event) => {
 });
 
 api.onState((next) => {
+  const before = Object.keys(state?.keywordConflicts || {}).join();
   state = next;
   render();
+  renderKeywordConflicts();
+  updateKeywordPreviews();
+  // Neu entstandener Konflikt (z. B. Modul installiert): einmal melden
+  const now = Object.keys(state.keywordConflicts || {});
+  if (now.length && now.join() !== before) showError(`Namenskonflikt bei ${now.map((k) => `{${k}}`).join(', ')} – unter „Keywords“ umbenennen.`);
 });
 
 api.getState().then((res) => {
   state = res.result;
   render();
+  renderKeywordConflicts();
   fillSettings();
 });

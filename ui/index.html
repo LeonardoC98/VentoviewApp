@@ -53,6 +53,7 @@
       </p>
       <form class="panel wide" id="keywordsForm">
         <div class="kw-head"><span>Keyword</span><span>Quelle</span><span>Wert / Ziel</span><span>Alle</span><span>Aktueller Wert</span><span></span></div>
+        <p class="kw-conflicts" id="keywordConflicts" role="alert" hidden></p>
         <div id="keywordRows"></div>
         <div class="actions">
           <button type="button" class="btn ghost" id="addKeyword">+ Keyword</button>
@@ -84,6 +85,7 @@
           <p><strong>Im Overlay</strong> funktionieren eigene Keywords wie alle anderen – auch in Bedingungen:
             z. B. eine rote Textebene mit der Bedingung „cputemp größer als 80“.</p>
           <p class="warn">Befehle laufen mit deinen Rechten auf diesem PC. Trag nur Befehle ein, die du verstehst – niemals welche, die dir jemand im Chat schickt.</p>
+          <p class="warn">Auf eigene Verantwortung: Programme anderer Hersteller (z. B. LibreHardwareMonitor – offiziell nur auf github.com/LibreHardwareMonitor) installierst du selbst. Ventoview haftet nicht für Schäden, Datenverlust oder Schadsoftware.</p>
         </div>
       </details>
     </section>
@@ -94,6 +96,11 @@
       </div>
       <div class="panel wide">
         <p class="intro">Wähle Vorlagen aus – eigene Bilder, Videos und Töne darin packt Ventoview mit ein.</p>
+        <div class="share-filter">
+          <input type="search" id="shareSearch" placeholder="Vorlagen suchen …" autocomplete="off">
+          <div class="share-mods" id="shareMods"></div>
+          <div class="share-pick"><span id="shareCount"></span><button type="button" class="btn ghost small" id="shareAll">Alle sichtbaren wählen</button><button type="button" class="btn ghost small" id="shareNone">Keine</button></div>
+        </div>
         <div class="checks" id="shareDesigns"></div>
         <label class="check"><input type="checkbox" id="shareHome"><span>Home-Einstellungen mitnehmen</span><small>Anordnung deines Home-Bildschirms auf der Webseite</small></label>
         <div class="actions">
@@ -137,6 +144,18 @@
           <button type="button" class="btn" id="addExtension">Datei hinzufügen …</button>
         </div>
         <div id="extensionList"></div>
+      </div>
+      <div class="panel">
+        <div class="row">
+          <span>
+            <strong>Komplette Sicherung</strong>
+            <small>Alle App-Daten als eine .vview-Datei: Designs, eigene Medien, Modul-Einstellungen, Keywords, Home und Einstellungen. Konto- und Twitch-Verbindung bleiben auf diesem PC.</small>
+          </span>
+          <span class="update-actions">
+            <button type="button" class="btn" id="saveBackupBtn">Alles sichern …</button>
+            <button type="button" class="btn ghost" id="loadBackupBtn">Sicherung laden …</button>
+          </span>
+        </div>
       </div>
       <form class="panel" id="settingsForm">
         <label class="row">
