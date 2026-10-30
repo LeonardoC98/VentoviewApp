@@ -390,3 +390,131 @@ button.brand:hover { background: rgba(255, 255, 255, .06); }
 .kw-row textarea.kw-code { min-height: 70px; font: 12.5px/1.5 Consolas, monospace; tab-size: 4; white-space: pre; overflow-x: auto; }
 .kw-help { color: var(--muted); font-size: 11.5px; line-height: 1.45; }
 .kw-help code { font: 11.5px Consolas, monospace; color: var(--text); }
+
+/* ==========================================================================
+   Design 2 (wie die Webseite): ruhige Flächen statt umrandeter Kästen, runde Knöpfe,
+   Reiter als Schalterleiste, mehr Luft. Steht am Ende und löst die älteren Regeln ab.
+   ========================================================================== */
+:root {
+  --bg: #0b0b0f;
+  --surface: rgba(255, 255, 255, .035);
+  --surface-2: rgba(255, 255, 255, .06);
+  --hairline: rgba(255, 255, 255, .075);
+  --field: rgba(0, 0, 0, .28);
+  --radius: 16px;
+}
+body {
+  background: radial-gradient(900px 420px at 50% -160px, rgba(139, 92, 246, .14), transparent 70%), var(--bg);
+  font: 14px/1.5 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Kopfzeile: durchscheinend, Reiter als Schalterleiste in der Mitte */
+.topbar { position: relative; height: 64px; gap: 18px; padding: 0 22px; background: rgba(11, 11, 15, .6); border-bottom: 1px solid var(--hairline); backdrop-filter: blur(14px); }
+.tabs { position: absolute; left: 50%; transform: translateX(-50%); gap: 2px; padding: 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); }
+.tabs button { padding: 7px 16px; border-radius: 999px; font-size: 13.5px; transition: color .15s, background .15s; }
+.tabs button[aria-selected=true] { background: var(--surface-2); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 4px 14px -6px rgba(0, 0, 0, .6); }
+.service { padding: 6px 12px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); font-size: 12.5px; }
+button.brand:hover { background: var(--surface); }
+@media (max-width: 860px) { .tabs { position: static; transform: none; } }
+
+main { padding: 12px 28px 40px; }
+main > section { max-width: 1120px; margin: 0 auto; }
+
+/* Überschriften */
+.section-head { margin: 30px 0 14px; }
+.section-head h2 { font-size: 12px; letter-spacing: .12em; color: #7c7c8c; }
+.intro { color: #9a9aaa; font-size: 13.5px; line-height: 1.6; }
+
+/* Knöpfe */
+.btn { height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hairline); transition: background .15s, box-shadow .15s; }
+.btn:hover { border-color: transparent; background: rgba(255, 255, 255, .095); }
+.btn.primary { background: linear-gradient(180deg, #9a6cff, #7c4def); box-shadow: 0 8px 22px -10px rgba(139, 92, 246, .8), inset 0 1px 0 rgba(255, 255, 255, .2); }
+.btn.primary:hover { background: linear-gradient(180deg, #a57cff, #8556f5); }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn.danger:hover { box-shadow: inset 0 0 0 1px rgba(248, 113, 113, .5); color: var(--error); }
+.btn.small { height: 30px; padding: 0 12px; }
+.btn.icon-only { width: 36px; }
+.btn.twitch { box-shadow: 0 8px 22px -10px rgba(145, 70, 255, .8); }
+.update-pill { height: 30px; border: 0; box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .45); }
+
+/* Module: Liste als eine Fläche mit feinen Trennlinien, Entdecken als offene Kacheln */
+.list { gap: 0; padding: 4px; border-radius: 20px; background: var(--surface); }
+.list > .card { border: 0; border-radius: 14px; background: none; padding: 14px 16px; transition: background .2s; }
+.list > .card + .card { box-shadow: 0 -1px 0 0 var(--hairline); }
+.list > .card:hover { background: rgba(255, 255, 255, .025); }
+.grid { gap: 10px; }
+.card { border: 0; background: var(--surface); border-radius: var(--radius); }
+.grid .card { padding: 18px; transition: background .2s; }
+.grid .card:hover { background: rgba(255, 255, 255, .05); }
+.card-title { font-size: 15px; letter-spacing: -.005em; }
+.card-desc { color: #9a9aaa; line-height: 1.55; }
+.tile {
+  border-radius: 30%;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--tile, var(--accent)) 78%, #fff), var(--tile, var(--accent)) 45%, color-mix(in srgb, var(--tile, var(--accent)) 78%, #000));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 8px 20px -10px color-mix(in srgb, var(--tile, var(--accent)) 80%, transparent);
+  color: #fff;
+}
+.badge { background: rgba(139, 92, 246, .16); }
+.empty { border: 1px dashed rgba(255, 255, 255, .1); border-radius: var(--radius); background: rgba(255, 255, 255, .015); }
+
+/* Flächen (Einstellungen, Keywords, Teilen) */
+.panel { max-width: 760px; padding: 4px 22px; border: 0; border-radius: 20px; background: var(--surface); }
+.panel.wide { max-width: none; }
+.row { border-bottom-color: var(--hairline); }
+.row input[type=number], .row input[type=url], .code-input, #tab-share input[type=search], #tab-share .actions input[type=text] {
+  border: 0; border-radius: 10px; background: var(--field); box-shadow: inset 0 0 0 1px var(--hairline);
+}
+.row input:focus, #tab-share input[type=search]:focus, #tab-share .actions input[type=text]:focus { box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .7), 0 0 0 3px rgba(139, 92, 246, .15); }
+.switch span { background: rgba(255, 255, 255, .14); }
+.connections { gap: 12px; }
+.connection { padding: 16px 22px; }
+.help { padding: 0 22px; }
+.help summary { list-style: none; display: flex; align-items: center; gap: 8px; }
+.help summary::-webkit-details-marker { display: none; }
+.help summary::before { content: ''; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.help[open] summary::before { transform: rotate(45deg); }
+.help-body .warn { background: rgba(251, 191, 36, .08); border-radius: 12px; }
+code { background: rgba(255, 255, 255, .06); }
+
+/* Keywords: Tabelle ruhiger, Felder dunkel */
+.kw-head { padding: 16px 0 8px; font-size: 11px; letter-spacing: .1em; color: #6f6f7e; }
+.kw-row { padding: 8px 0; border-bottom-color: var(--hairline); }
+.kw-row input, .kw-row select, .kw-row textarea { border: 0; border-radius: 10px; background: var(--field); box-shadow: inset 0 0 0 1px var(--hairline); }
+.kw-row input:focus, .kw-row select:focus, .kw-row textarea:focus { box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .7); }
+.kw-row > .btn { border-radius: 10px; }
+.kw-preview { border-radius: 10px; background: rgba(139, 92, 246, .1); }
+.examples { gap: 10px; }
+.card.example { padding: 16px 18px; }
+.card.example .card-title small { color: #7c7c8c; }
+.kw-py-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.kw-full-toggle { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 3px 10px 3px 6px; border-radius: 999px; background: rgba(255, 255, 255, .04); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.kw-full-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #f59e0b; box-shadow: none; }
+.kw-row.kw-full .kw-full-toggle { background: rgba(245, 158, 11, .14); color: #fbbf24; }
+.kw-row.kw-full textarea.kw-code { box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .45); }
+
+/* Fenster */
+.modal { border: 0; border-radius: 22px; background: #131318; box-shadow: 0 30px 90px rgba(0, 0, 0, .65), inset 0 0 0 1px var(--hairline); }
+.modal::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); }
+#moduleDialog .dialog-head, #moduleDialog .settings-form .actions { background: #131318; border-color: var(--hairline); }
+.settings-form textarea, .settings-form input[type=text], .settings-form input[type=number], .settings-form select { border: 0; border-radius: 10px; background: var(--field); box-shadow: inset 0 0 0 1px var(--hairline); }
+.toast { border: 0; border-radius: 14px; background: #2a161b; box-shadow: 0 16px 40px rgba(0, 0, 0, .5), inset 0 0 0 1px rgba(248, 113, 113, .35); }
+
+/* Hinweis beim Öffnen der Keywords */
+.warning-dialog { width: min(520px, calc(100vw - 40px)); padding: 26px 28px 22px; text-align: left; }
+.warning-dialog .warning-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 14px; border-radius: 14px; background: rgba(245, 158, 11, .14); color: #fbbf24; font-size: 22px; font-weight: 800; }
+.warning-dialog h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.01em; }
+.warning-dialog p { margin: 0 0 12px; color: #b4b4c2; line-height: 1.6; }
+.warning-dialog ul { display: grid; gap: 8px; margin: 0 0 14px; padding-left: 18px; color: #b4b4c2; line-height: 1.55; }
+.warning-dialog li b { color: var(--text); }
+.warning-dialog .muted { color: var(--muted); font-size: 12.5px; }
+.warning-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+.warning-actions .check { color: var(--muted); font-size: 13px; }
+.warning-actions .check input { accent-color: var(--accent); }
+
+/* Bildlaufleisten schmal und dezent */
+* { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .16) transparent; }
+.tabs button:not([aria-selected=true]) { background: transparent; box-shadow: none; }
+.tabs button:focus { outline: none; }
+.tabs button:focus-visible { box-shadow: inset 0 0 0 2px rgba(139, 92, 246, .6); }

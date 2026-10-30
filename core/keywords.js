@@ -120,11 +120,11 @@ const READERS = {
     });
   }),
 
-  python: async ({ key, target }, sources) => {
+  python: async ({ key, target, full }, sources) => {
     const vars = { ...sources.allValues(), ...sources.values };
     delete vars[key];
     for (const [k, v] of Object.entries(vars)) if (v !== null && typeof v === 'object') vars[k] = JSON.stringify(v);
-    const raw = await runPython(JSON.stringify({ code: target, key, vars, store: sources.stores[key] || {} }));
+    const raw = await runPython(JSON.stringify({ code: target, key, vars, store: sources.stores[key] || {}, full: Boolean(full) }));
     let result;
     try {
       result = JSON.parse(raw);
@@ -163,7 +163,8 @@ function findPython() {
   return pythonCmd;
 }
 
-const PY_RUNNER = '# Ventoview: führt den Python-Code eines Keywords aus. Eingabe (stdin, JSON): code, key, vars, store.\n# Alle Variablen stehen unter ihrem Namen bereit (und in „variablen“), „speicher“ bleibt zwischen den Läufen erhalten.\nimport sys, json, io, contextlib\ndata = json.loads(sys.stdin.buffer.read().decode("utf-8"))\ndef wert(v):\n    if isinstance(v, str):\n        t = v.strip().replace(",", ".") if v.strip().count(",") == 1 and "." not in v else v.strip()\n        try:\n            return int(t)\n        except ValueError:\n            pass\n        try:\n            f = float(t)\n            if f == f and abs(f) != float("inf"):\n                return f\n        except ValueError:\n            pass\n    return v\nvariablen = {k: wert(v) for k, v in data["vars"].items()}\ng = {"__name__": "__ventoview__", "variablen": variablen, "speicher": data.get("store") or {}}\nfor k, v in variablen.items():\n    if k.isidentifier():\n        g[k] = v\nkey = data["key"]\nout = io.StringIO()\nwith contextlib.redirect_stdout(out):\n    exec(compile(data["code"], "<" + key + ">", "exec"), g)\nfound = None\nfor k, v in g.items():\n    if k.lower() == key and k not in ("variablen", "speicher"):\n        found = v\nif found is None:\n    for k in ("ergebnis", "result"):\n        if k in g:\n            found = g[k]\nif found is None:\n    found = out.getvalue().strip()\nif isinstance(found, bool):\n    found = "ja" if found else "nein"\nelif isinstance(found, float):\n    found = round(found, 4)\n    found = int(found) if found.is_integer() else found\nif isinstance(found, (dict, list)):\n    text = json.dumps(found, ensure_ascii=False, default=str)\nelse:\n    text = str(found)\ntry:\n    store = json.loads(json.dumps(g["speicher"], default=str))\nexcept Exception:\n    store = {}\nsys.stdout.buffer.write(json.dumps({"value": text, "store": store}, ensure_ascii=False).encode("utf-8"))';
+// Der Python-Rahmen (Variablen bereitstellen, sicherer Modus, Wert zurückgeben) liegt in keyword-runner.py
+const PY_RUNNER = require('node:fs').readFileSync(require('node:path').join(__dirname, 'keyword-runner.py'), 'utf8');
 
 async function runPython(input) {
   const [cmd, pre] = await findPython();
@@ -260,6 +261,8 @@ function normalizeKeywords(list) {
         if (path.length > 200 || /[\u0000-\u001f]/.test(path)) throw new Error(`„${key}“: ungültiger JSON-Pfad.`);
         entry.path = path;
       }
+      // Python: sicherer Modus, außer „voller Zugriff“ ist bewusst eingeschaltet
+      if (source === 'python' && item.full) entry.full = true;
     }
     result.push(entry);
   }

@@ -61,7 +61,7 @@ function installedCard(mod) {
       h('div', { class: 'card-status' }, h('span', { class: `dot ${status.state}` }), status.text),
     ),
     h('div', { class: 'card-actions' },
-      mod.settings?.length && h('button', { class: 'btn icon-only', type: 'button', title: 'Einstellungen', 'aria-label': 'Einstellungen', onclick: () => openModuleSettings(mod.id) }, gearIcon()),
+      mod.settings?.length > 0 && h('button', { class: 'btn icon-only', type: 'button', title: 'Einstellungen', 'aria-label': 'Einstellungen', onclick: () => openModuleSettings(mod.id) }, gearIcon()),
       mod.locked
         ? h('button', { class: 'btn primary', type: 'button', onclick: () => run('openAccount') }, state.account?.connected ? 'Freischalten' : 'Konto verbinden')
         : mod.needsExtension && !mod.inactive
@@ -797,7 +797,7 @@ const SOURCES = {
   file: { label: 'Datei', placeholder: 'C:\\Stream\\song.txt', interval: 2 },
   command: { label: 'Befehl', placeholder: 'PowerShell-Befehl, z. B. (Get-Date).Year', interval: 30 },
   url: { label: 'Webadresse', placeholder: 'https://…', interval: 30 },
-  python: { label: 'Python', placeholder: 'test = cpu * 2  # andere Variablen einfach mit Namen nutzen', interval: 5 },
+  python: { label: 'Python', placeholder: 'test = ping * 2  # andere Variablen einfach mit Namen nutzen', interval: 5 },
 };
 
 const EXAMPLES = [
@@ -823,6 +823,16 @@ const EXAMPLES = [
     title: 'CPU-Temperatur',
     text: 'Braucht LibreHardwareMonitor mit eingeschaltetem Webserver (siehe Anleitung unten).',
     keyword: { key: 'cputemp', source: 'url', target: 'http://localhost:8085/data.json', path: '**[Text~Tctl].Value', interval: 3 },
+  },
+  {
+    title: 'Mit Python rechnen',
+    text: 'Eigener Python-Code (sicherer Modus): Minuten seit Mitternacht. Andere Variablen nutzt du einfach mit Namen, z. B. ping * 2.',
+    keyword: { key: 'minuten', source: 'python', target: 'from datetime import datetime\njetzt = datetime.now()\nminuten = jetzt.hour * 60 + jetzt.minute', interval: 30 },
+  },
+  {
+    title: 'Python mit Gedächtnis',
+    text: 'Zählt, wie oft der Ping seit dem Start über 80 ms lag – „speicher“ bleibt zwischen den Läufen erhalten. Braucht {ping}.',
+    keyword: { key: 'lags', source: 'python', target: 'if ping > 80:\n    speicher["n"] = speicher.get("n", 0) + 1\nlags = speicher.get("n", 0)', interval: 10 },
   },
   {
     title: 'Song aus einer Textdatei',
@@ -884,9 +894,18 @@ function keywordRow(entry = { source: 'text' }) {
         e.preventDefault();
         main.setRangeText('    ', main.selectionStart, main.selectionEnd, 'end');
       });
-      parts.push(h('small', { class: 'kw-help' },
-        'Andere Variablen einfach mit Namen nutzen (z. B. cpu, songtitle) – Zahlen sind schon Zahlen. Den Wert setzt du mit ',
-        h('code', {}, `${entry.key || 'name'} = …`), ', „speicher“ merkt sich Werte zwischen den Läufen. Braucht Python 3.'));
+      const full = h('input', { type: 'checkbox', name: 'full' });
+      full.checked = Boolean(entry.full);
+      full.addEventListener('change', () => {
+        if (full.checked && !confirm('Voller Zugriff für dieses Python-Keyword?\n\nDer Code darf dann alles, was du auf diesem PC darfst: Dateien lesen, ändern und löschen, Programme starten, ins Internet senden.\n\nNur einschalten, wenn du den Code selbst geschrieben hast und genau verstehst. Niemals für Code aus dem Chat, Discord oder von Fremden.')) full.checked = false;
+        row.classList.toggle('kw-full', full.checked);
+      });
+      row.classList.toggle('kw-full', full.checked);
+      parts.push(h('div', { class: 'kw-py-foot' },
+        h('small', { class: 'kw-help' },
+          'Andere Variablen einfach mit Namen nutzen (z. B. ping, songtitle) – Zahlen sind schon Zahlen. Den Wert setzt du mit ',
+          h('code', {}, `${entry.key || 'name'} = …`), '. Sicherer Modus: nur Rechnen und Text, keine Dateien oder Programme.'),
+        h('label', { class: 'kw-full-toggle', title: 'Ohne sicheren Modus – der Code darf alles, was du darfst' }, full, h('span', {}, 'Voller Zugriff'))));
     }
     if (src === 'url') parts.push(h('input', { type: 'text', name: 'path', value: entry.path || '', placeholder: 'JSON-Pfad (optional)', spellcheck: 'false' }));
     target.className = `kw-target kw-${src}`;
@@ -1013,6 +1032,7 @@ $('keywordsForm').addEventListener('submit', async (event) => {
       target: source === 'text' ? undefined : target,
       path: row.querySelector('[name=path]')?.value,
       interval: row.querySelector('[name=interval]').value,
+      full: source === 'python' ? Boolean(row.querySelector('[name=full]')?.checked) : undefined,
     };
   });
   const res = await api.saveKeywords(list, renames);
@@ -1034,10 +1054,44 @@ document.querySelectorAll('.tabs button').forEach((tab) => {
       fillSettings();
       $('settingsMessage').textContent = '';
     }
-    if (tab.dataset.tab === 'keywords') fillKeywords();
+    if (tab.dataset.tab === 'keywords') {
+      fillKeywords();
+      keywordWarning();
+    }
     if (tab.dataset.tab === 'share') renderSharing();
   });
 });
+
+// Hinweis-Fenster beim Öffnen der Keywords: Befehle und Python laufen mit deinen Rechten
+function keywordWarning() {
+  try {
+    if (localStorage.getItem('vv-keyword-warning-off') === '1') return;
+  } catch { /* ohne Speicher: jedes Mal zeigen */ }
+  const dialog = h('dialog', { class: 'modal warning-dialog' });
+  const never = h('input', { type: 'checkbox' });
+  const close = () => {
+    try {
+      if (never.checked) localStorage.setItem('vv-keyword-warning-off', '1');
+    } catch { /* egal */ }
+    dialog.close();
+  };
+  dialog.addEventListener('close', () => dialog.remove());
+  dialog.append(
+    h('div', { class: 'warning-icon' }, '!'),
+    h('h3', {}, 'Bevor du loslegst'),
+    h('p', {}, 'Eigene Keywords können auf diesem PC Dinge ausführen: Befehle laufen in PowerShell, Python-Code in Python – mit deinen Rechten.'),
+    h('ul', {},
+      h('li', {}, h('b', {}, 'Nur eigenen Code eintragen'), ' oder Code, den du Zeile für Zeile verstehst.'),
+      h('li', {}, h('b', {}, 'Niemals Code aus Chat, Discord oder von Fremden'), ' übernehmen – auch nicht „nur zum Testen“.'),
+      h('li', {}, h('b', {}, 'Python läuft im sicheren Modus:'), ' nur Rechnen und Text. „Voller Zugriff“ schaltest du pro Keyword bewusst ein.'),
+      h('li', {}, h('b', {}, 'Text, Datei und Webadresse'), ' sind harmlos – sie lesen nur.')),
+    h('p', { class: 'muted' }, 'Mehr dazu im Handbuch unter „Eigene Keywords & Python“.'),
+    h('div', { class: 'warning-actions' },
+      h('label', { class: 'check' }, never, h('span', {}, 'Nicht mehr anzeigen')),
+      h('button', { class: 'btn primary', type: 'button', onclick: close }, 'Verstanden')));
+  document.body.append(dialog);
+  dialog.showModal();
+}
 
 $('refreshBtn').addEventListener('click', () => run('refresh'));
 $('brandBtn').addEventListener('click', () => run('openHome'));

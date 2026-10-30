@@ -48,7 +48,7 @@
       <p class="intro">
         Eigene Keywords benutzt du im Editor jedes Moduls, z. B. <code>{streamer}</code> in einem Text – sie stehen dort unter
         „Variablen → Ventoview“. Ein Keyword kann ein fester Text sein oder laufend neu gelesen werden: aus einer Datei,
-        einem PowerShell-Befehl oder einer Webadresse. Fest eingebaut sind <code>{zeit}</code>, <code>{datum}</code>,
+        einem PowerShell-Befehl, einer Webadresse oder eigenem Python-Code. Fest eingebaut sind <code>{zeit}</code>, <code>{datum}</code>,
         <code>{wochentag}</code> und <code>{laufzeit}</code>.
       </p>
       <form class="panel wide" id="keywordsForm">
@@ -78,13 +78,22 @@
           <p><strong>Webadresse</strong> – die Antwort einer Adresse, z. B. eines Programms mit eingebautem Webserver oder einer API.
             Mit dem JSON-Pfad holst du ein einzelnes Feld heraus: <code>data.title</code>, <code>items[0].name</code> –
             oder du suchst im ganzen Baum: <code>**[Text~Tctl].Value</code> nimmt das erste Objekt, dessen „Text“ „Tctl“ enthält.</p>
+          <p><strong>Python</strong> – eigener Code, der aus anderen Variablen neue macht. Alle Variablen stehen unter ihrem Namen bereit,
+            Zahlen schon als Zahlen: <code>test = 2 * ping</code> ergibt bei 42 ms „84“. Den Wert setzt du mit dem Namen des Keywords
+            (sonst zählt <code>ergebnis = …</code> oder was der Code mit <code>print</code> ausgibt). <code>True</code>/<code>False</code> werden
+            zu „ja“/„nein“, ein Wörterbuch wie <code>{"a": 1}</code> zu eigenen Variablen (<code>{test_a}</code>). <code>speicher</code> merkt sich
+            Werte zwischen den Läufen, z. B. <code>speicher["n"] = speicher.get("n", 0) + 1</code>. Fehler stehen rot in der Vorschau, mit Zeilennummer.</p>
+          <p><strong>Sicherer Modus</strong> – Python-Keywords dürfen standardmäßig nur rechnen und mit Text arbeiten, dazu Module wie
+            <code>math</code>, <code>random</code>, <code>datetime</code>, <code>statistics</code>, <code>json</code> und <code>re</code>. Gesperrt sind Dateien,
+            Programme, Netzwerk und Python-Interna. „Voller Zugriff“ hebt das für ein Keyword auf – nur für eigenen Code, den du verstehst.
+            Braucht Python 3 von python.org (Haken bei „Add to PATH“).</p>
           <p><strong>Beispiel CPU-Temperatur:</strong> Windows liefert sie meist nicht selbst. Installiere das kostenlose
             <em>LibreHardwareMonitor</em>, starte es (am besten als Administrator) und schalte unter <em>Options → Remote Web Server → Run</em>
             den Webserver ein. Dann das Beispiel „CPU-Temperatur“ übernehmen. Bei Intel-Prozessoren statt <code>Tctl</code> den Pfad
             <code>**[Text~CPU Package].Value</code> nehmen.</p>
           <p><strong>Im Overlay</strong> funktionieren eigene Keywords wie alle anderen – auch in Bedingungen:
             z. B. eine rote Textebene mit der Bedingung „cputemp größer als 80“.</p>
-          <p class="warn">Befehle laufen mit deinen Rechten auf diesem PC. Trag nur Befehle ein, die du verstehst – niemals welche, die dir jemand im Chat schickt.</p>
+          <p class="warn">Befehle und Python-Code mit vollem Zugriff laufen mit deinen Rechten auf diesem PC. Trag nur ein, was du verstehst – niemals Code, den dir jemand im Chat schickt.</p>
           <p class="warn">Auf eigene Verantwortung: Programme anderer Hersteller (z. B. LibreHardwareMonitor – offiziell nur auf github.com/LibreHardwareMonitor) installierst du selbst. Ventoview haftet nicht für Schäden, Datenverlust oder Schadsoftware.</p>
         </div>
       </details>
