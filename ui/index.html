@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:">
 <title>Ventoview</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -165,6 +165,16 @@
             <button type="button" class="btn ghost" id="loadBackupBtn">Sicherung laden …</button>
           </span>
         </div>
+      </div>
+      <div class="panel">
+        <div class="row">
+          <span>
+            <strong>Modul-Symbole</strong>
+            <small>Eigene Bilder für deine Module – hier in der App und auf der Home-Seite. Quadratisch, mindestens 128 × 128 px
+              (ideal 512 × 512), PNG mit Transparenz sieht am besten aus. Andere Formate werden mittig zugeschnitten und auf 256 × 256 px gebracht.</small>
+          </span>
+        </div>
+        <div class="icon-list" id="iconList"></div>
       </div>
       <form class="panel" id="settingsForm">
         <label class="row">

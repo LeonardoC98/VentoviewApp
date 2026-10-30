@@ -34,8 +34,72 @@ async function run(action, ...args) {
 }
 
 function tile(mod) {
+  // Eigenes Symbol aus den Einstellungen hat Vorrang
+  const icon = state?.moduleIcons?.[mod.id];
+  if (icon) return h('div', { class: 'tile has-icon' }, h('img', { src: icon, alt: '' }));
   const badge = mod.badge || mod.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 3);
   return h('div', { class: 'tile', style: mod.accent ? `--tile:${mod.accent}` : null }, badge);
+}
+
+// Bild für ein Modul-Symbol vorbereiten: mindestens 128 px, mittig quadratisch zuschneiden, auf 256 × 256 PNG bringen
+const ICON_SIZE = 256;
+const ICON_MIN = 128;
+function prepareIcon(file) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\/(png|jpeg|webp|gif|svg\+xml)$/.test(file.type)) return reject(new Error('Bitte ein Bild wählen (PNG, JPG, WebP, GIF oder SVG).'));
+    if (file.size > 5 * 1024 * 1024) return reject(new Error('Das Bild ist größer als 5 MB.'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const svg = file.type === 'image/svg+xml';
+      const w = img.naturalWidth || (svg ? ICON_SIZE : 0);
+      const hgt = img.naturalHeight || (svg ? ICON_SIZE : 0);
+      if (!svg && (w < ICON_MIN || hgt < ICON_MIN)) return reject(new Error(`Das Bild ist zu klein (${w} × ${hgt} px) – mindestens ${ICON_MIN} × ${ICON_MIN} px.`));
+      const side = Math.min(w, hgt);
+      const canvas = document.createElement('canvas');
+      canvas.width = ICON_SIZE;
+      canvas.height = ICON_SIZE;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, (w - side) / 2, (hgt - side) / 2, side, side, 0, 0, ICON_SIZE, ICON_SIZE);
+      resolve({ dataUrl: canvas.toDataURL('image/png'), cropped: Math.abs(w - hgt) > 2 });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Das Bild konnte nicht gelesen werden.'));
+    };
+    img.src = url;
+  });
+}
+
+// Einstellungen → Modul-Symbole: je Modul das aktuelle Symbol, „Bild wählen“ und „Zurücksetzen“
+function renderIcons() {
+  const mods = (state.installed || []).filter((m) => !m.locked);
+  $('iconList').replaceChildren(...(mods.length ? mods.map((mod) => {
+    const input = h('input', {
+      type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif,image/svg+xml', hidden: true,
+      onchange: async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+          const { dataUrl, cropped } = await prepareIcon(file);
+          const res = await run('setModuleIcon', mod.id, dataUrl);
+          if (res.ok && cropped) showError('Nicht quadratisch – das Bild wurde mittig zugeschnitten.');
+        } catch (err) {
+          showError(err.message);
+        }
+      },
+    });
+    const custom = Boolean(state.moduleIcons?.[mod.id]);
+    return h('div', { class: 'icon-row' },
+      tile(mod),
+      h('span', { class: 'icon-name' }, mod.name, custom ? h('small', {}, 'eigenes Bild') : null),
+      input,
+      h('button', { type: 'button', class: 'btn small', onclick: () => input.click() }, custom ? 'Ändern …' : 'Bild wählen …'),
+      custom ? h('button', { type: 'button', class: 'btn small ghost', onclick: () => run('setModuleIcon', mod.id, null) }, 'Zurücksetzen') : null);
+  }) : [h('p', { class: 'empty small' }, 'Noch keine Module.')]));
 }
 
 function gearIcon() {
@@ -149,6 +213,7 @@ function render() {
   renderAccount();
   renderTwitch();
   renderExtensions();
+  renderIcons();
   $('about').textContent = `Ventoview ${version}${state.installed ? '' : ' · nicht installiert (Test- oder Entwicklungsversion)'}`;
   renderUpdate();
   if (!$('tab-keywords').hidden) updateKeywordPreviews();

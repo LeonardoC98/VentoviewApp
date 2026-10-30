@@ -151,7 +151,7 @@ async function init() {
 
   // Für die Webseite (Home, Module): Liste der Module, aktiv/inaktiv, Anordnung des Home-Bildschirms
   bridge.handle('modules.list', () => modules.list().installed.map((m) => ({
-    id: m.id, name: m.name, version: m.version, accent: m.accent, badge: m.badge,
+    id: m.id, name: m.name, version: m.version, accent: m.accent, badge: m.badge, icon: config.get('moduleIcons')?.[m.id] || null,
     locked: m.locked, inactive: m.inactive, needsExtension: m.needsExtension, requires: m.requires || null, status: m.status,
   })));
   bridge.handle('module.active', (msg) => modules.setActive(String(msg.module), Boolean(msg.active)));
@@ -326,6 +326,7 @@ function getState() {
     keywordErrors: keywordSources?.errors ?? {},
     keywordChildren: keywordSources?.children ?? {},
     keywordConflicts: modules?.keywordConflicts() ?? {},
+    moduleIcons: config.get('moduleIcons') || {},
     reservedNames: Object.fromEntries(modules?.moduleNames() ?? []),
     update: updater.state,
     account: account?.state() ?? null,
@@ -357,6 +358,20 @@ handle('modules:refresh', async () => {
   await modules.autoInstall();
 });
 handle('modules:active', (id, active) => modules.setActive(id, active));
+// Eigenes Modul-Symbol (Einstellungen): fertig zugeschnittenes 256-px-PNG als data-URL – null = wieder das Standard-Symbol
+handle('modules:icon', (id, dataUrl) => {
+  const key = String(id || '');
+  if (!/^[a-z0-9_-]{1,40}$/.test(key)) throw new Error('Unbekanntes Modul.');
+  const icons = { ...(config.get('moduleIcons') || {}) };
+  if (dataUrl == null) delete icons[key];
+  else {
+    if (typeof dataUrl !== 'string' || !/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(dataUrl)) throw new Error('Das Bild konnte nicht gelesen werden.');
+    if (dataUrl.length > 700_000) throw new Error('Das Bild ist zu groß.');
+    icons[key] = dataUrl;
+  }
+  config.set({ moduleIcons: icons });
+  pushState();
+});
 handle('extensions:install', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: 'Ventoview-Erweiterung wählen',
