@@ -375,24 +375,28 @@ function renderUpdate() {
     idle: 'Wird geprüft …',
     checking: 'Suche nach Updates …',
     latest: `Du hast die neueste Version (${state.version}).`,
+    available: `Version ${version} ist verfügbar.`,
     downloading: `Version ${version} wird geladen … ${progress ?? 0} %`,
-    ready: `Version ${version} ist bereit und wird beim Beenden installiert.`,
+    ready: `Version ${version} ist geladen.`,
     error: error || 'Update-Prüfung fehlgeschlagen.',
   };
   $('updateText').textContent = texts[status];
   $('updateText').classList.toggle('error', status === 'error');
-  $('checkUpdateBtn').disabled = ['disabled', 'checking', 'downloading', 'ready'].includes(status);
-  $('installUpdateBtn').hidden = status !== 'ready';
+  $('checkUpdateBtn').disabled = ['disabled', 'checking', 'available', 'downloading', 'ready'].includes(status);
+  // Installiert wird nur per Klick – nie von selbst
+  const canInstall = ['available', 'ready'].includes(status);
+  $('installUpdateBtn').hidden = !canInstall;
+  $('installUpdateBtn').textContent = `Update ${version} installieren`;
 
   const pill = $('updatePill');
-  pill.hidden = !['downloading', 'ready'].includes(status);
-  pill.classList.toggle('ready', status === 'ready');
-  pill.textContent = status === 'ready' ? `Update ${version} installieren` : `Update ${version} … ${progress ?? 0} %`;
-  pill.title = status === 'ready' ? 'Ventoview schließt sich kurz und startet in der neuen Version' : '';
+  pill.hidden = !['available', 'downloading', 'ready'].includes(status);
+  pill.classList.toggle('ready', canInstall);
+  pill.textContent = canInstall ? `Update ${version} installieren` : `Update ${version} … ${progress ?? 0} %`;
+  pill.title = canInstall ? 'Lädt das Update, Ventoview schließt sich kurz und startet in der neuen Version' : '';
 }
 
 $('updatePill').addEventListener('click', () => {
-  if (state.update.status === 'ready') run('installUpdate');
+  if (['available', 'ready'].includes(state.update.status)) run('installUpdate');
 });
 $('installUpdateBtn').addEventListener('click', () => run('installUpdate'));
 $('checkUpdateBtn').addEventListener('click', () => run('checkUpdate'));

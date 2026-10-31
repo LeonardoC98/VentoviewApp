@@ -269,7 +269,7 @@ function trayMenu() {
   return Menu.buildFromTemplate([
     { label: t('Ventoview öffnen'), click: showWindow },
     { label: t('Webseite öffnen'), click: () => shell.openExternal(config.get('siteUrl')) },
-    ...(status === 'ready' ? [{ label: t('Update {0} installieren', version), click: () => updater.install() }] : []),
+    ...(['available', 'ready'].includes(status) ? [{ label: t('Update {0} installieren', version), click: () => updater.install() }] : []),
     { type: 'separator' },
     { label: t('Beenden'), click: () => app.quit() },
   ]);
