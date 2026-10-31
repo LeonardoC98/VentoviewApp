@@ -391,8 +391,9 @@ function renderUpdate() {
   const pill = $('updatePill');
   pill.hidden = !['available', 'downloading', 'ready'].includes(status);
   pill.classList.toggle('ready', canInstall);
-  pill.textContent = canInstall ? `Update ${version} installieren` : `Update ${version} … ${progress ?? 0} %`;
-  pill.title = canInstall ? 'Lädt das Update, Ventoview schließt sich kurz und startet in der neuen Version' : '';
+  // Kurz halten – die Kopfzeile ist schmal; die Version steht im Tooltip und unter Einstellungen
+  pill.textContent = canInstall ? 'Update installieren' : `Update ${progress ?? 0} %`;
+  pill.title = canInstall ? `Version ${version}: lädt das Update, Ventoview schließt sich kurz und startet in der neuen Version` : `Version ${version}`;
 }
 
 $('updatePill').addEventListener('click', () => {

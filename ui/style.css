@@ -531,3 +531,13 @@ code { background: rgba(255, 255, 255, .06); }
 .lang-select { height: 30px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--surface-2, rgba(255, 255, 255, .06)); box-shadow: inset 0 0 0 1px var(--hairline); color: var(--muted); font: 600 13px Inter, "Segoe UI", sans-serif; cursor: pointer; color-scheme: dark; }
 .lang-select:hover { color: var(--text); }
 .lang-select option { background: #17171f; color: #f2f2f5; }
+
+/* Kopfzeile als drei Spalten: Logo | Reiter (Mitte) | Status – so überlappt nichts, auch wenn rechts das
+   Update-Abzeichen dazukommt. Wird es eng, kürzt sich der Status-Text statt über die Reiter zu laufen. */
+.topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
+.topbar .tabs { position: static; transform: none; }
+.top-right { justify-content: flex-end; min-width: 0; gap: 10px; margin-left: 0; }
+.service { min-width: 0; }
+#serviceText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.update-pill { flex: none; }
+@media (max-width: 900px) { #serviceText { display: none; } .tabs button { padding: 7px 11px; } .topbar { gap: 10px; padding: 0 16px; } }
