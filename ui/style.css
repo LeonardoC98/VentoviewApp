@@ -488,7 +488,7 @@ code { background: rgba(255, 255, 255, .06); }
 .examples { gap: 10px; }
 .card.example { padding: 16px 18px; }
 .card.example .card-title small { color: #7c7c8c; }
-.kw-py-foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.kw-py-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .kw-full-toggle { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 3px 10px 3px 6px; border-radius: 999px; background: rgba(255, 255, 255, .04); color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
 .kw-full-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #f59e0b; box-shadow: none; }
 .kw-row.kw-full .kw-full-toggle { background: rgba(245, 158, 11, .14); color: #fbbf24; }

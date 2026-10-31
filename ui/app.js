@@ -994,11 +994,12 @@ function keywordRow(entry = { source: 'text' }) {
         row.classList.toggle('kw-full', full.checked);
       });
       row.classList.toggle('kw-full', full.checked);
+      // Erst der Schalter, darunter der Hinweis über die volle Breite
       parts.push(h('div', { class: 'kw-py-foot' },
+        h('label', { class: 'kw-full-toggle', title: 'Ohne sicheren Modus – der Code darf alles, was du darfst' }, full, h('span', {}, 'Voller Zugriff')),
         h('small', { class: 'kw-help' },
           'Andere Variablen einfach mit Namen nutzen (z. B. ping, songtitle) – Zahlen sind schon Zahlen. Den Wert setzt du mit ',
-          h('code', {}, `${entry.key || 'name'} = …`), '. Sicherer Modus: nur Rechnen und Text, keine Dateien oder Programme.'),
-        h('label', { class: 'kw-full-toggle', title: 'Ohne sicheren Modus – der Code darf alles, was du darfst' }, full, h('span', {}, 'Voller Zugriff'))));
+          h('code', {}, `${entry.key || 'name'} = …`), '. Sicherer Modus: nur Rechnen und Text, keine Dateien oder Programme.')));
     }
     if (src === 'url') parts.push(h('input', { type: 'text', name: 'path', value: entry.path || '', placeholder: 'JSON-Pfad (optional)', spellcheck: 'false' }));
     target.className = `kw-target kw-${src}`;
