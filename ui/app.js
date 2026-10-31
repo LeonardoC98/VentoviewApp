@@ -234,13 +234,30 @@ function render() {
 }
 
 // Geladene App-Erweiterungen (.vvext)
+// 1.1.10 > 1.1.9
+function versionNewer(a, b) {
+  const x = String(a).split('.').map(Number);
+  const y = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+}
+
 function renderExtensions() {
   const list = state.extensions || [];
   $('extensionList').replaceChildren(...(list.length
-    ? list.map((ext) => h('div', { class: 'row' },
-      h('span', {}, h('strong', {}, ext.name || ext.id), h('small', {}, `Version ${ext.version} · ${ext.id}.vvext`)),
-      h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (confirm(`„${ext.name}“ entfernen? Module, die sie brauchen, laufen dann nicht.`)) run('removeExtension', ext.id); } }, 'Entfernen'),
-    ))
+    ? list.map((ext) => {
+      // Neuere Version auf der Webseite → Hinweis und Download
+      const latest = (state.extensionsAvailable || []).find((x) => x.id === ext.id);
+      const update = latest && versionNewer(latest.version, ext.version) ? latest.version : null;
+      return h('div', { class: 'row' },
+        h('span', {}, h('strong', {}, ext.name || ext.id),
+          h('small', {}, `Version ${ext.version} · ${ext.id}.vvext`),
+          update ? h('small', { class: 'ext-update' }, `Update ${update} verfügbar – herunterladen und mit „Datei hinzufügen …“ einsetzen`) : null),
+        h('span', { class: 'btn-row' },
+          update ? h('button', { type: 'button', class: 'btn primary', onclick: () => run('downloadExtension', ext.id) }, `Update ${update} laden`) : null,
+          h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (confirm(`„${ext.name}“ entfernen? Module, die sie brauchen, laufen dann nicht.`)) run('removeExtension', ext.id); } }, 'Entfernen')),
+      );
+    })
     : [h('div', { class: 'row last' }, h('small', {}, 'Keine Erweiterungen. Braucht ein Modul eine, sagt dir die App Bescheid.'))]));
 }
 
@@ -585,11 +602,14 @@ function inputLabel(id) {
   if (m) return `🎮 ${PAD_NAMES[m[1]] || `Taste ${Number(m[1]) + 1}`}`;
   m = /^pad:a(\d+)$/.exec(id);
   if (m) return `🎮 ${AXIS_NAMES[m[1]] || `Achse ${Number(m[1]) + 1}`}`;
-  m = /^midi:n(\d+)$/.exec(id);
-  if (m) return `🎹 MIDI-Pad/Note ${m[1]}`;
-  m = /^midi:cc(\d+)$/.exec(id);
-  if (m) return `🎹 MIDI-Regler CC ${m[1]}`;
-  if (id === 'midi:pb') return '🎹 Pitch-Bend';
+  // MIDI auf Kanal 2–16 hat „@Kanal“ hinten: midi:n11@2 (DJ-Controller: ein Kanal pro Deck)
+  m = /^midi:(n|cc|pb)(\d*)(?:@(\d+))?$/.exec(id);
+  if (m) {
+    const ch = m[3] ? ` · Kanal ${m[3]}` : '';
+    if (m[1] === 'n') return `🎹 MIDI-Pad/Note ${m[2]}${ch}`;
+    if (m[1] === 'cc') return `🎹 MIDI-Regler CC ${m[2]}${ch}`;
+    return `🎹 Pitch-Bend${ch}`;
+  }
   return id;
 }
 
@@ -1195,6 +1215,7 @@ $('refreshBtn').addEventListener('click', () => run('refresh'));
 $('iconsBtn').addEventListener('click', openIconDialog);
 $('brandBtn').addEventListener('click', () => run('openHome'));
 $('addExtension').addEventListener('click', () => run('installExtension'));
+$('extensionPage').addEventListener('click', () => run('extensionPage'));
 $('saveBackupBtn').addEventListener('click', async () => {
   const res = await run('saveBackup');
   if (res.ok && res.result) showError(`Gesichert: ${res.result.files} Dateien (${(res.result.bytes / 1048576).toFixed(1)} MB).`);

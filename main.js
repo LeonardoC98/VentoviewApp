@@ -161,6 +161,8 @@ async function init() {
   bridge.handle('module.active', (msg) => modules.setActive(String(msg.module), Boolean(msg.active)));
   // Sprache: die Webseite fragt nach und übernimmt die neuere Wahl – oder gibt ihre neuere an die App
   bridge.handle('app.language', () => config.get('language') || { code: 'en', at: 0 });
+  // Für die Seite /erweiterungen/: welche Erweiterungen in welcher Version installiert sind
+  bridge.handle('extensions.list', () => extensions.list().map(({ id, name, version }) => ({ id, name, version })));
   bridge.handle('app.language.set', (msg) => {
     const at = Math.min(Date.now() + 60_000, Math.max(0, Number(msg.at) || Date.now()));
     const current = config.get('language') || { at: 0 };
@@ -346,6 +348,7 @@ function getState() {
     account: account?.state() ?? null,
     twitch: twitch?.state() ?? null,
     extensions: extensions?.list() ?? [],
+    extensionsAvailable: modules?.registry?.extensions || [],
     shareDir: sharing?.shareDir ?? null,
     ...modules.list(),
   };
@@ -430,6 +433,8 @@ handle('input:record', (kind) => {
   return ext.record(kind === 'value' ? 'value' : 'button');
 });
 handle('extensions:download', (id) => shell.openExternal(new URL(`api/extensions/${encodeURIComponent(id)}`, config.get('siteUrl')).href));
+// Seite mit allen Erweiterungen (Download, Versionen) im Browser
+handle('extensions:page', () => shell.openExternal(new URL('erweiterungen/', config.get('siteUrl')).href));
 handle('share:list', () => sharing.overview());
 handle('share:export', async (opts) => {
   const dir = await sharing.exportTo(opts);

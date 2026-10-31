@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('streamhub', {
   installExtension: () => ipcRenderer.invoke('extensions:install'),
   removeExtension: (id) => ipcRenderer.invoke('extensions:remove', id),
   downloadExtension: (id) => ipcRenderer.invoke('extensions:download', id),
+  extensionPage: () => ipcRenderer.invoke('extensions:page'),
   shareList: () => ipcRenderer.invoke('share:list'),
   shareExport: (opts) => ipcRenderer.invoke('share:export', opts),
   shareImport: (dir) => ipcRenderer.invoke('share:import', dir),
