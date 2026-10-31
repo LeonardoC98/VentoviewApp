@@ -77,6 +77,13 @@
     return found ? out.join('') : null;
   }
 
+  // Nur exakte Treffer (für Werte und Beispiele – Muster könnten dort Falsches erwischen)
+  function exactT(text) {
+    if (lang === 'de' || typeof text !== 'string') return text;
+    const hit = exact.get(norm(text));
+    return (hit && hit[LANGS.indexOf(lang) - 1]) || text;
+  }
+
   // Für Code: t('Speichern') bzw. t('Verbunden als {0}', name)
   function t(text, ...args) {
     const out = lookup(text) ?? text;
@@ -134,6 +141,22 @@
     }
   }
 
+  // Ganze Texte je Sprache (Handbuch, Rechtstexte): <div data-lang="en">…</div> neben <div data-lang="de">…</div>.
+  // Gezeigt wird der Block der gewählten Sprache, sonst der deutsche. Übersetzte Blöcke fasst das Wörterbuch nicht an.
+  function showLangBlocks() {
+    const groups = new Map();
+    for (const el of document.querySelectorAll('[data-lang]')) {
+      if (el.dataset.lang !== 'de') el.setAttribute('data-no-i18n', '');
+      const list = groups.get(el.parentNode) || [];
+      list.push(el);
+      groups.set(el.parentNode, list);
+    }
+    for (const list of groups.values()) {
+      const show = list.some((el) => el.dataset.lang === lang) ? lang : 'de';
+      for (const el of list) el.hidden = el.dataset.lang !== show;
+    }
+  }
+
   function refresh() {
     if (typeof document === 'undefined' || !document.documentElement || domless) return;
     if (document.title) {
@@ -142,6 +165,7 @@
       document.title = tr ?? document.vvTitle;
     }
     document.documentElement.lang = lang;
+    showLangBlocks();
     walk(document.body || document.documentElement);
   }
 
@@ -231,7 +255,7 @@
     } catch { /* ältere App ohne Sprachen */ }
   }
 
-  const api = { LANGS, NAMES, add, t, setLang, choose, syncWithApp, get lang() { return lang; }, onChange: (fn) => listeners.add(fn), refresh, stored, browserLang };
+  const api = { LANGS, NAMES, add, t, exactT, setLang, choose, syncWithApp, get lang() { return lang; }, onChange: (fn) => listeners.add(fn), refresh, stored, browserLang };
   root.VVI18n = api;
 
   if (typeof document !== 'undefined' && !domless) {
