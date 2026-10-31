@@ -313,6 +313,17 @@ code { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: 
 #tab-share .section-head span { display: flex; gap: 8px; }
 .hotkey code { font-size: 11px; opacity: .7; }
 .hotkey-new .btn { white-space: nowrap; }
+/* Name anklicken = umbenennen; Regler mit Einmessen (Min/Max) */
+.hotkey .hk-name { cursor: text; border-radius: 4px; }
+.hotkey .hk-name:hover { background: rgba(255, 255, 255, .06); }
+.hotkey .hk-rename { flex: 1; min-width: 0; padding: 3px 8px; }
+.btn.recording { animation: vv-rec 1.2s ease-in-out infinite; }
+@keyframes vv-rec { 50% { opacity: .65; } }
+.hotkey.dial { display: grid; gap: 4px; }
+.dial-main { display: flex; align-items: center; gap: 10px; }
+.dial-main b { flex: 1; }
+.dial-info { opacity: .7; font-size: 12px; }
+.dial-ok { color: #4ade80; font-size: 12px; }
 .btn.icon-only { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 .btn.icon-only .icon { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* Logo oben links öffnet die Home-Seite */

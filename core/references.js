@@ -54,7 +54,8 @@ class References {
     }
     const blocks = this.modules.running.get('chatbot')?.settings?.blocks;
     if (Array.isArray(blocks)) {
-      const count = this.walk(blocks.map((b) => ({ text: b.text })), name);
+      const count = this.walk(blocks.map((b) => ({ text: b.text })), name)
+        + blocks.filter((b) => String(b.shortcut || '').toLowerCase() === name.toLowerCase()).length;
       if (count) out.push({ where: 'Chat-Bot', count });
     }
     return out;
@@ -77,8 +78,10 @@ class References {
     const blocks = !designsOnly && entry?.settings?.blocks;
     if (Array.isArray(blocks)) {
       const texts = blocks.map((b) => ({ text: b.text }));
-      if (this.walk(texts, from, to)) {
-        const next = blocks.map((b, i) => ({ ...b, text: texts[i].text }));
+      // Chat-Bot-Elemente „bei Tastenkürzel“ hängen am Namen des Kürzels
+      const onShortcut = (b) => String(b.shortcut || '').toLowerCase() === from.toLowerCase();
+      if (this.walk(texts, from, to) + blocks.filter(onShortcut).length) {
+        const next = blocks.map((b, i) => ({ ...b, text: texts[i].text, ...(onShortcut(b) ? { shortcut: to } : {}) }));
         await this.modules.saveSettings('chatbot', { ...entry.settings, blocks: next });
         changed += 1;
       }

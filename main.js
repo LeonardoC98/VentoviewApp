@@ -432,6 +432,16 @@ handle('input:record', (kind) => {
   if (!ext?.record) throw new Error('Dafür braucht es die Tastenkürzel-Erweiterung ab Version 1.1 – auf der Webseite neu herunterladen.');
   return ext.record(kind === 'value' ? 'value' : 'button');
 });
+// Aufnahme abbrechen (z. B. kam stattdessen eine Taste der Tastatur)
+handle('input:cancel', () => extensions.get('shortcuts')?.cancel?.());
+// Regler einmessen (Min/Max): start → state (live) → stop → { id, value }
+handle('input:calib', (action, lock) => {
+  const ext = extensions.get('shortcuts');
+  if (!ext?.calibStart) throw new Error('Dafür braucht es die Tastenkürzel-Erweiterung ab Version 1.2 – unter Einstellungen → Erweiterungen „Herunterladen …“.');
+  if (action === 'start') return ext.calibStart(typeof lock === 'string' ? lock : null);
+  if (action === 'state') return ext.calibState();
+  return ext.calibStop();
+});
 handle('extensions:download', (id) => shell.openExternal(new URL(`api/extensions/${encodeURIComponent(id)}`, config.get('siteUrl')).href));
 // Seite mit allen Erweiterungen (Download, Versionen) im Browser
 handle('extensions:page', () => shell.openExternal(new URL('erweiterungen/', config.get('siteUrl')).href));
@@ -610,6 +620,20 @@ handle('keywords:save', async (list, renames = []) => {
     if (before.has(from) && !now.has(from) && now.has(to)) changed += await references.rename(from, to);
   }
   pushState();
+  return { changed };
+});
+// Umbenannte Tastenkürzel (nach dem Speichern) in Designs und Chat-Bot mitziehen – auch die Variablen-Form
+// ({meinkuerzel} ist ja/nein, solange es gedrückt ist)
+handle('shortcuts:rename', async (renames = []) => {
+  const varName = (name) => String(name).toLowerCase().replace(/[^a-z0-9_]/g, '');
+  let changed = 0;
+  for (const r of Array.isArray(renames) ? renames : []) {
+    const from = String(r?.from || '').trim();
+    const to = String(r?.to || '').trim();
+    if (!from || !to || from === to) continue;
+    changed += await references.rename(from, to);
+    if (varName(from) && varName(to) && varName(from) !== from.toLowerCase()) changed += await references.rename(varName(from), varName(to), { designsOnly: true });
+  }
   return { changed };
 });
 // Wo ein Keyword benutzt wird → [{ where, count }]

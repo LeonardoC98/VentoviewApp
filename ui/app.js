@@ -165,7 +165,7 @@ function openExtensionWizard(mod) {
     h('div', { class: 'wizard' },
       h('p', {}, `„${mod.name}“ braucht eine Erweiterung, die die App auf deinem PC erweitert${ext.why ? ` – ${ext.why}` : ''}. Sie gehört zu deinem Kauf und wird nur geladen, wenn du sie brauchst.`),
       h('ol', {},
-        h('li', {}, h('b', {}, 'Herunterladen: '), 'Die Datei ', h('code', {}, `${ext.extension}.vvext`), ' gibt es nach dem Kauf auf der Webseite. ',
+        h('li', {}, h('b', {}, 'Herunterladen: '), 'Die Datei ', h('code', {}, (state.extensionsAvailable || []).find((x) => x.id === ext.extension)?.file || `${ext.extension}.vvext`), ' gibt es nach dem Kauf auf der Webseite. ',
           h('button', { type: 'button', class: 'btn small', onclick: () => run('downloadExtension', ext.extension) }, 'Download öffnen')),
         h('li', {}, h('b', {}, 'Einsetzen: '), 'Hier die heruntergeladene Datei auswählen (meist im Ordner „Downloads“). Die App prüft die Unterschrift und legt sie zu ihren Modulen. ',
           h('button', {
@@ -251,7 +251,8 @@ function renderExtensions() {
       const update = latest && versionNewer(latest.version, ext.version) ? latest.version : null;
       return h('div', { class: 'row' },
         h('span', {}, h('strong', {}, ext.name || ext.id),
-          h('small', {}, `Version ${ext.version} · ${ext.id}.vvext`),
+          // Dateiname wie beim Download: englischer Modulname + Version (Shortcuts-1.2.0.vvext)
+          h('small', {}, `Version ${ext.version} · ${latest?.file ? latest.file.replace(/-[^-]+\.vvext$/, `-${ext.version}.vvext`) : `${ext.id}.vvext`}`),
           update ? h('small', { class: 'ext-update' }, `Update ${update} verfügbar – herunterladen und mit „Datei hinzufügen …“ einsetzen`) : null),
         h('span', { class: 'btn-row' },
           update ? h('button', { type: 'button', class: 'btn primary', onclick: () => run('downloadExtension', ext.id) }, `Update ${update} laden`) : null,
@@ -536,7 +537,13 @@ function openModuleSettings(id) {
     if (!res.ok) return;
     saved = input;
     dirty = false;
-    setTimeout(() => $('moduleDialog').close(), 500);
+    // Umbenannte Tastenkürzel: Designs und Chat-Bot nachziehen
+    const renames = [...form.querySelectorAll('input[data-renames]')].flatMap((el) => JSON.parse(el.dataset.renames || '[]'));
+    if (renames.length && api.renameShortcuts) {
+      const moved = await api.renameShortcuts(renames);
+      if (moved.ok && moved.result.changed) message.textContent = `Gespeichert – Name in ${moved.result.changed} Design(s)/Chat-Bot mitgeändert.`;
+    }
+    setTimeout(() => $('moduleDialog').close(), renames.length ? 1500 : 500);
   }
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -557,6 +564,9 @@ function openModuleSettings(id) {
   };
   $('moduleDialog').onclose = () => {
     $('moduleDialog').onclose = null;
+    // Aufnahme oder Einmessen läuft noch: beenden
+    api.cancelInput?.();
+    if (form.querySelector('.recording')) api.calibInput?.('stop');
     if (dirty) api.previewModuleSettings?.(id, saved);
     dirty = false;
   };
@@ -678,68 +688,133 @@ function extraKeyEditor(field, lines) {
   return h('div', { class: 'extra-keys' }, rows, h('div', { class: 'hotkey-add' }, nameInput, button), info, hidden);
 }
 
+// Name ohne Eingabe: aus der Taste ableiten (ctrl_alt_t, note16, pad_a, cc19 …) – sonst new1, new2, new3 …
+const PAD_SHORT = ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'back', 'start', 'l3', 'r3', 'up', 'down', 'left', 'right', 'home'];
+function autoName(keys, taken) {
+  let base = '';
+  let m = /^midi:(n|cc|pb)(\d*)(?:@(\d+))?$/.exec(keys || '');
+  if (m) base = `${m[1] === 'n' ? 'note' : m[1]}${m[2]}${m[3] ? `_k${m[3]}` : ''}`;
+  else if ((m = /^pad:b(\d+)$/.exec(keys || ''))) base = `pad_${PAD_SHORT[m[1]] || `b${m[1]}`}`;
+  else if ((m = /^pad:a(\d+)$/.exec(keys || ''))) base = `stick${Number(m[1]) + 1}`;
+  else if (keys) base = String(keys).toLowerCase().replace(/\+/g, '_').replace(/[^a-z0-9_]/g, '');
+  const free = (n) => !taken.has(n.toLowerCase());
+  if (base && free(base)) return base;
+  if (base) for (let i = 2; ; i++) if (free(`${base}_${i}`)) return `${base}_${i}`;
+  for (let i = 1; ; i++) if (free(`new${i}`)) return `new${i}`;
+}
+
+// Name zum Anklicken und Umbenennen. check(name) → Fehlertext oder null; done(neu) übernimmt
+function editableName(name, check, done) {
+  const label = h('b', { class: 'hk-name', title: 'Klicken zum Umbenennen' }, name);
+  label.addEventListener('click', () => {
+    const input = h('input', { type: 'text', class: 'hk-rename', value: name, maxlength: '40' });
+    let closed = false;
+    const finish = (keep) => {
+      if (closed) return;
+      const next = input.value.trim().replace(/=/g, '');
+      if (keep && next && next !== name) {
+        const problem = check(next);
+        if (problem) { showError(problem); input.focus(); return; }
+        closed = true;
+        done(next);
+        return;
+      }
+      closed = true;
+      input.replaceWith(label);
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+  });
+  return label;
+}
+
 function hotkeyEditor(field, lines) {
   const list = lines.map((line) => {
     const i = line.indexOf('=');
     return { name: line.slice(0, i).trim(), keys: line.slice(i + 1).trim() };
   }).filter((x) => x.name && x.keys);
+  const renames = []; // { from, to } – nach dem Speichern in Designs und Chat-Bot nachziehen
   const hidden = h('input', { type: 'hidden', name: field.key });
   const rows = h('div', { class: 'hotkeys' });
-  const nameInput = h('input', { type: 'text', placeholder: 'Name, z. B. results', maxlength: '40' });
-  const recordBtn = h('button', { type: 'button', class: 'btn primary', title: 'Tastatur' }, 'Aufnehmen');
-  // Taste an Gamepad oder MIDI-Gerät statt Tastatur
-  const padBtn = h('button', { type: 'button', class: 'btn', title: 'Gamepad (Xbox, PS4 …) oder MIDI-Gerät' }, '🎮 Controller');
-  let stopRecording = null;
-  padBtn.addEventListener('click', async () => {
-    const name = nameInput.value.trim().replace(/=/g, '');
-    if (!name) return nameInput.focus();
-    if (list.some((x) => x.name.toLowerCase() === name.toLowerCase())) return showError(`„${name}“ gibt es schon.`);
-    const keys = await recordInput(padBtn, 'button');
-    if (!keys) return;
-    if (list.some((x) => x.keys === keys)) return showError(`${inputLabel(keys)} ist schon vergeben.`);
-    list.push({ name, keys });
-    nameInput.value = '';
-    sync();
-  });
+  const nameInput = h('input', { type: 'text', placeholder: 'Name (optional), z. B. results', maxlength: '40' });
+  const recordBtn = h('button', { type: 'button', class: 'btn primary', title: 'Tastatur, Gamepad oder MIDI-Gerät' }, 'Aufnehmen');
+  const taken = () => new Set(list.map((x) => x.name.toLowerCase()));
 
   const sync = () => {
     hidden.value = JSON.stringify(list.map((x) => `${x.name} = ${x.keys}`));
+    hidden.dataset.renames = JSON.stringify(renames.filter((r) => list.some((x) => x.name === r.to)));
     if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true })); // Fenster übernimmt vorläufig
     rows.replaceChildren(...(list.length ? list.map((x) => h('div', { class: 'hotkey' },
-      h('b', {}, x.name), h('kbd', {}, /^(pad|midi):/.test(x.keys) ? inputLabel(x.keys) : x.keys),
+      editableName(x.name, (next) => (taken().has(next.toLowerCase()) ? `„${next}“ gibt es schon.` : null), (next) => {
+        const chain = renames.find((r) => r.to === x.name);
+        if (chain) chain.to = next; else renames.push({ from: x.name, to: next });
+        x.name = next;
+        sync();
+      }),
+      h('kbd', {}, /^(pad|midi):/.test(x.keys) ? inputLabel(x.keys) : x.keys),
       h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: () => { list.splice(list.indexOf(x), 1); sync(); } }, '×'),
     )) : [h('div', { class: 'empty small' }, 'Noch keine Tastenkürzel.')]));
   };
 
+  const add = (keys) => {
+    if (list.some((x) => x.keys === keys)) return showError(`${/^(pad|midi):/.test(keys) ? inputLabel(keys) : keys} ist schon vergeben.`);
+    const typed = nameInput.value.trim().replace(/=/g, '');
+    if (typed && taken().has(typed.toLowerCase())) return showError(`„${typed}“ gibt es schon.`);
+    list.push({ name: typed || autoName(keys, taken()), keys });
+    nameInput.value = '';
+    sync();
+  };
+
+  // Ein Knopf für alles: Tastatur (hier im Fenster) und Gamepad/MIDI (über die Erweiterung) – was zuerst kommt, zählt
+  let stop = null;
   recordBtn.addEventListener('click', () => {
-    if (stopRecording) return stopRecording();
-    const name = nameInput.value.trim().replace(/=/g, '');
-    if (!name) return nameInput.focus();
-    if (list.some((x) => x.name.toLowerCase() === name.toLowerCase())) return showError(`„${name}“ gibt es schon.`);
-    recordBtn.textContent = 'Tasten drücken … (Esc = abbrechen)';
+    if (stop) return stop();
+    let done = false;
+    const finish = (keys) => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('keydown', onKey, true);
+      recordBtn.textContent = 'Aufnehmen';
+      recordBtn.classList.remove('recording');
+      stop = null;
+      if (keys) add(keys);
+    };
     const onKey = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      if (event.key === 'Escape' && !event.ctrlKey && !event.altKey) return stopRecording();
+      if (event.key === 'Escape' && !event.ctrlKey && !event.altKey) {
+        api.cancelInput?.();
+        return finish(null);
+      }
       const keys = accelerator(event);
       if (keys === null) return;
       if (!keys) return showError('Bitte mit Strg, Alt oder Shift kombinieren (oder F1–F24).');
-      if (list.some((x) => x.keys === keys)) return showError(`${keys} ist schon vergeben.`);
-      list.push({ name, keys });
-      nameInput.value = '';
-      sync();
-      stopRecording();
+      api.cancelInput?.();
+      finish(keys);
     };
-    stopRecording = () => {
-      window.removeEventListener('keydown', onKey, true);
-      recordBtn.textContent = 'Aufnehmen';
-      stopRecording = null;
-    };
+    stop = () => { api.cancelInput?.(); finish(null); };
+    recordBtn.textContent = 'Taste drücken … (Klick = abbrechen)';
+    recordBtn.classList.add('recording');
     window.addEventListener('keydown', onKey, true);
+    api.recordInput('button').then((res) => {
+      if (done) return;
+      if (!res.ok) return; // ohne Erweiterung: nur Tastatur – bis Esc oder Klick
+      if (res.result) finish(res.result);
+      else {
+        finish(null);
+        showError('Nichts erkannt – noch einmal „Aufnehmen“ und eine Taste drücken.');
+      }
+    });
   });
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); recordBtn.click(); } });
   sync();
-  return h('div', { class: 'hotkey-editor' }, rows, h('div', { class: 'hotkey-new' }, nameInput, recordBtn, padBtn), hidden);
+  return h('div', { class: 'hotkey-editor' }, rows, h('div', { class: 'hotkey-new' }, nameInput, recordBtn), hidden);
 }
 
 // Zufallsgeneratoren (Chat-Bot): je ein Befehl wie !lucky, ein Antworttext mit {treffer} und Einträge mit Chance
@@ -836,38 +911,104 @@ function randomizerEditor(field, initial) {
   return h('div', { class: 'randomizer-editor' }, wrap, hidden);
 }
 
-// Regler 1–8: je ein Drehknopf, Fader, Stick oder Trigger → {regler1} … {regler8}
+// Regler: beliebig viele. Jeder wird eingemessen – erst Minimum, dann Maximum – und liefert {reglerN} als 0–100.
+// Gespeichert als „N = Eingabe | min | max | Name“ (ältere Einträge „N = Eingabe“ gelten als 0 … 1).
 function dialEditor(field, lines) {
-  const map = {};
+  const dials = [];
   for (const line of lines) {
-    const i = line.indexOf('=');
-    const n = Number(line.slice(0, i));
-    if (n >= 1 && n <= 8) map[n] = line.slice(i + 1).trim();
+    const i = String(line).indexOf('=');
+    const n = Number(String(line).slice(0, i));
+    if (!(n >= 1)) continue;
+    const [id = '', min = '0', max = '1', name = ''] = String(line).slice(i + 1).split('|').map((x) => x.trim());
+    dials.push({ n, id, min: Number(min) || 0, max: max === '' ? 1 : Number(max), name: name || `regler${n}` });
   }
+  dials.sort((a, b) => a.n - b.n);
   const hidden = h('input', { type: 'hidden', name: field.key });
   const rows = h('div', { class: 'hotkeys' });
+  const pct = (v) => `${Math.round(v * 100)} %`;
+  const taken = () => new Set(dials.map((d) => d.name.toLowerCase()));
+  let busy = null; // gerade laufende Einmessung
+
   const sync = () => {
-    hidden.value = JSON.stringify(Object.entries(map).map(([n, id]) => `${n} = ${id}`));
-    if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true })); // Fenster übernimmt vorläufig
-    rows.replaceChildren(...Array.from({ length: 8 }, (_, k) => {
-      const n = k + 1;
-      const assign = h('button', { type: 'button', class: 'btn small' }, map[n] ? 'Ändern' : 'Zuweisen');
-      assign.addEventListener('click', async () => {
-        const id = await recordInput(assign, 'value');
-        if (!id) return;
-        for (const key of Object.keys(map)) if (map[key] === id) delete map[key];
-        map[n] = id;
-        sync();
-      });
-      return h('div', { class: 'hotkey' },
-        h('b', {}, `Regler ${n}`), h('code', {}, `{regler${n}}`),
-        map[n] ? h('kbd', {}, inputLabel(map[n])) : h('small', { class: 'muted' }, 'frei'),
-        assign,
-        map[n] ? h('button', { type: 'button', class: 'btn ghost small', title: 'Lösen', onclick: () => { delete map[n]; sync(); } }, '×') : null);
-    }));
+    if (busy) {
+      clearInterval(busy.poll);
+      busy = null;
+      api.calibInput('stop');
+    }
+    hidden.value = JSON.stringify(dials.map((d) => `${d.n} = ${d.id} | ${Math.round(d.min * 10000) / 10000} | ${Math.round(d.max * 10000) / 10000} | ${d.name}`));
+    if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true }));
+    rows.replaceChildren(...(dials.length ? dials.map((d) => dialRow(d)) : [h('div', { class: 'empty small' }, 'Noch keine Regler.')]));
   };
+
+  function dialRow(d) {
+    const info = h('small', { class: 'dial-info' },
+      d.id ? `${inputLabel(d.id)} · Min ${pct(d.min)} · Max ${pct(d.max)}` : 'Noch nicht eingemessen – zuerst „Min aufnehmen“.');
+    const minBtn = h('button', { type: 'button', class: 'btn small' }, 'Min aufnehmen');
+    const maxBtn = h('button', { type: 'button', class: 'btn small', disabled: !d.id }, 'Max aufnehmen');
+    // Einmessen: starten, Regler stellen, Knopf nochmal = übernehmen
+    const calibrate = async (which, button) => {
+      if (busy && busy !== button) return;
+      if (busy === button) {
+        busy = null;
+        clearInterval(button.poll);
+        const res = await api.calibInput('stop');
+        if (!res.ok) return showError(res.error);
+        const r = res.result;
+        if (!r) {
+          sync();
+          return showError(which === 'min' ? 'Nichts erkannt – Regler bewegen und dann aufs Minimum stellen.' : 'Kein Wert – Regler einmal bewegen und aufs Maximum stellen.');
+        }
+        if (which === 'min') {
+          if (d.id !== r.id && dials.some((x) => x !== d && x.id === r.id)) { sync(); return showError(`${inputLabel(r.id)} ist schon „${dials.find((x) => x.id === r.id).name}“.`); }
+          const auto = /^(new\d+|regler\d+)$/.test(d.name);
+          if (d.id !== r.id) d.max = 1;
+          d.id = r.id;
+          d.min = r.value;
+          if (auto) d.name = autoName(r.id, new Set([...taken()].filter((x) => x !== d.name.toLowerCase())));
+          sync();
+          d.confirm = `Minimum gespeichert: ${inputLabel(r.id)} bei ${pct(r.value)}. Jetzt „Max aufnehmen“.`;
+        } else {
+          if (Math.abs(r.value - d.min) < 0.02) { sync(); return showError('Minimum und Maximum sind gleich – Regler ganz aufdrehen und noch einmal.'); }
+          d.max = r.value;
+          d.confirm = `Maximum gespeichert: ${pct(r.value)}. Fertig – {regler${d.n}} läuft jetzt von 0 bis 100.`;
+        }
+        return sync();
+      }
+      const res = await api.calibInput('start', which === 'max' ? d.id : null);
+      if (!res.ok) return showError(res.error);
+      busy = button;
+      button.textContent = which === 'min' ? 'Fertig – Regler steht auf Minimum' : 'Fertig – Regler steht auf Maximum';
+      button.classList.add('primary', 'recording');
+      info.textContent = which === 'min' ? 'Regler bewegen und aufs Minimum stellen, dann „Fertig“.' : 'Regler aufs Maximum stellen, dann „Fertig“.';
+      // Live zeigen, was erkannt ist
+      button.poll = setInterval(async () => {
+        const s = await api.calibInput('state');
+        if (busy !== button) return;
+        if (s.ok && s.result) info.textContent = `Erkannt: ${inputLabel(s.result.id)} · ${s.result.value == null ? '–' : pct(s.result.value)}`;
+      }, 150);
+    };
+    minBtn.addEventListener('click', () => calibrate('min', minBtn));
+    maxBtn.addEventListener('click', () => calibrate('max', maxBtn));
+    const confirm = d.confirm ? h('small', { class: 'dial-ok' }, d.confirm) : null;
+    d.confirm = null;
+    return h('div', { class: 'hotkey dial' },
+      h('div', { class: 'dial-main' },
+        editableName(d.name, (next) => (taken().has(next.toLowerCase()) ? `„${next}“ gibt es schon.` : null), (next) => { d.name = next; sync(); }),
+        h('code', {}, `{regler${d.n}}`),
+        minBtn, maxBtn,
+        h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: () => { if (busy) return; dials.splice(dials.indexOf(d), 1); sync(); } }, '×')),
+      info, confirm);
+  }
+
+  const addBtn = h('button', { type: 'button', class: 'btn ghost' }, '+ Regler');
+  addBtn.addEventListener('click', () => {
+    if (busy) return;
+    const n = Math.max(0, ...dials.map((d) => d.n)) + 1;
+    dials.push({ n, id: '', min: 0, max: 1, name: autoName('', taken()) });
+    sync();
+  });
   sync();
-  return h('div', { class: 'hotkey-editor' }, rows, hidden);
+  return h('div', { class: 'hotkey-editor' }, rows, h('div', { class: 'hotkey-new' }, addBtn), hidden);
 }
 
 // Vorschläge (z. B. gerade erkannte Quellen) live aktualisieren, ohne die Eingaben anzufassen
