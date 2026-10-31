@@ -541,3 +541,7 @@ code { background: rgba(255, 255, 255, .06); }
 #serviceText { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .update-pill { flex: none; }
 @media (max-width: 900px) { #serviceText { display: none; } .tabs button { padding: 7px 11px; } .topbar { gap: 10px; padding: 0 16px; } }
+
+/* Alle Auswahllisten (Keyword-Quelle, Modul-Einstellungen, Chat-Bot …) mit dunkler, lesbarer Liste wie die Sprachauswahl */
+select { color-scheme: dark; }
+select option { background: #17171f; color: #f2f2f5; }
