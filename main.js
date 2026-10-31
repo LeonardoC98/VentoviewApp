@@ -636,6 +636,8 @@ handle('shortcuts:rename', async (renames = []) => {
   }
   return { changed };
 });
+// Wo ein Tastenkürzel bzw. Regler benutzt wird (vor dem Löschen) → [{ where, count }]
+handle('shortcuts:usage', (names, dial) => references.usageMany(Array.isArray(names) ? names.map(String) : [], Number(dial) || null));
 // Wo ein Keyword benutzt wird → [{ where, count }]
 handle('keywords:usage', (name) => references.usage(String(name || '')));
 handle('dialog:file', async () => {

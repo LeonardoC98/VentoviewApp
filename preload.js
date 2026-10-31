@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('streamhub', {
   saveModuleSettings: (id, values) => ipcRenderer.invoke('modules:settings', id, values),
   previewModuleSettings: (id, values) => ipcRenderer.invoke('modules:settingsPreview', id, values),
   renameShortcuts: (renames) => ipcRenderer.invoke('shortcuts:rename', renames),
+  shortcutUsage: (names, dial) => ipcRenderer.invoke('shortcuts:usage', names, dial),
   moduleAction: (id, name) => ipcRenderer.invoke('modules:action', id, name),
   openAccount: () => ipcRenderer.invoke('account:open'),
   pairAccount: (code) => ipcRenderer.invoke('account:pair', code),

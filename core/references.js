@@ -61,6 +61,33 @@ class References {
     return out;
   }
 
+  // Mehrere Namen auf einmal (z. B. Tastenkürzel „Fader Links“ und {faderlinks}) – dazu optional Keyframe-Spuren,
+  // die an Regler Nr. „dial“ hängen → [{ where, count }] zusammengefasst je Design bzw. Chat-Bot
+  async usageMany(names, dial = null) {
+    const total = new Map();
+    const add = (where, count) => total.set(where, (total.get(where) || 0) + count);
+    for (const name of new Set(names.filter(Boolean).map((n) => String(n).toLowerCase()))) {
+      for (const u of await this.usage(name)) add(u.where, u.count);
+    }
+    if (dial) {
+      for (const info of await this.designs.list()) {
+        const design = await this.designs.get({ id: info.id });
+        if (!design) continue;
+        let count = 0;
+        const visit = (v) => {
+          if (Array.isArray(v)) v.forEach(visit);
+          else if (v && typeof v === 'object') {
+            if (v.src === 'dial' && Number(v.dial) === Number(dial)) count += 1;
+            Object.values(v).forEach(visit);
+          }
+        };
+        visit({ layers: design.layers, groups: design.groups });
+        if (count) add(`Design „${design.name || 'Ohne Namen'}“`, count);
+      }
+    }
+    return [...total].map(([where, count]) => ({ where, count }));
+  }
+
   // Alle Vorkommen von „from“ in „to“ umbenennen → Anzahl geänderter Designs/Bereiche
   async rename(from, to, { designsOnly = false } = {}) {
     if (!from || !to || from === to) return 0;

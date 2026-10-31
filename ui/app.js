@@ -703,6 +703,16 @@ function autoName(keys, taken) {
   for (let i = 1; ; i++) if (free(`new${i}`)) return `new${i}`;
 }
 
+const varName = (name) => String(name).toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+// Vor dem Löschen: wird das Kürzel/der Regler in Designs oder im Chat-Bot benutzt? Dann erst nachfragen.
+async function confirmUnused(label, names, dial = null) {
+  if (!api.shortcutUsage) return true;
+  const res = await api.shortcutUsage(names, dial);
+  const used = res.ok ? res.result || [] : [];
+  return !used.length || confirm(`{${label}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`);
+}
+
 // Name zum Anklicken und Umbenennen. check(name) → Fehlertext oder null; done(neu) übernimmt
 function editableName(name, check, done) {
   const label = h('b', { class: 'hk-name', title: 'Klicken zum Umbenennen' }, name);
@@ -758,7 +768,14 @@ function hotkeyEditor(field, lines) {
         sync();
       }),
       h('kbd', {}, /^(pad|midi):/.test(x.keys) ? inputLabel(x.keys) : x.keys),
-      h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: () => { list.splice(list.indexOf(x), 1); sync(); } }, '×'),
+      h('button', {
+        type: 'button', class: 'btn ghost small', title: 'Löschen',
+        onclick: async () => {
+          if (!(await confirmUnused(varName(x.name) || x.name, [x.name, varName(x.name)]))) return;
+          list.splice(list.indexOf(x), 1);
+          sync();
+        },
+      }, '×'),
     )) : [h('div', { class: 'empty small' }, 'Noch keine Tastenkürzel.')]));
   };
 
@@ -911,7 +928,8 @@ function randomizerEditor(field, initial) {
   return h('div', { class: 'randomizer-editor' }, wrap, hidden);
 }
 
-// Regler: beliebig viele. Jeder wird eingemessen – erst Minimum, dann Maximum – und liefert {reglerN} als 0–100.
+// Regler: beliebig viele. Jeder wird eingemessen – erst Minimum, dann Maximum – und ist als Variable mit seinem Namen
+// ({fader_links}) 0–100. Die Nummer bleibt fest (Keyframe-Spuren hängen an ihr, {reglerN} gibt es weiter).
 // Gespeichert als „N = Eingabe | min | max | Name“ (ältere Einträge „N = Eingabe“ gelten als 0 … 1).
 function dialEditor(field, lines) {
   const dials = [];
@@ -927,6 +945,7 @@ function dialEditor(field, lines) {
   const rows = h('div', { class: 'hotkeys' });
   const pct = (v) => `${Math.round(v * 100)} %`;
   const taken = () => new Set(dials.map((d) => d.name.toLowerCase()));
+  const renames = []; // { from, to } – nach dem Speichern {alt} → {neu} in Designs und Chat-Bot
   let busy = null; // gerade laufende Einmessung
 
   const sync = () => {
@@ -936,6 +955,7 @@ function dialEditor(field, lines) {
       api.calibInput('stop');
     }
     hidden.value = JSON.stringify(dials.map((d) => `${d.n} = ${d.id} | ${Math.round(d.min * 10000) / 10000} | ${Math.round(d.max * 10000) / 10000} | ${d.name}`));
+    hidden.dataset.renames = JSON.stringify(renames.filter((r) => dials.some((d) => d.name === r.to)));
     if (hidden.isConnected) hidden.dispatchEvent(new Event('vv-change', { bubbles: true }));
     rows.replaceChildren(...(dials.length ? dials.map((d) => dialRow(d)) : [h('div', { class: 'empty small' }, 'Noch keine Regler.')]));
   };
@@ -970,7 +990,7 @@ function dialEditor(field, lines) {
         } else {
           if (Math.abs(r.value - d.min) < 0.02) { sync(); return showError('Minimum und Maximum sind gleich – Regler ganz aufdrehen und noch einmal.'); }
           d.max = r.value;
-          d.confirm = `Maximum gespeichert: ${pct(r.value)}. Fertig – {regler${d.n}} läuft jetzt von 0 bis 100.`;
+          d.confirm = `Maximum gespeichert: ${pct(r.value)}. Fertig – {${varName(d.name)}} läuft jetzt von 0 bis 100.`;
         }
         return sync();
       }
@@ -993,10 +1013,23 @@ function dialEditor(field, lines) {
     d.confirm = null;
     return h('div', { class: 'hotkey dial' },
       h('div', { class: 'dial-main' },
-        editableName(d.name, (next) => (taken().has(next.toLowerCase()) ? `„${next}“ gibt es schon.` : null), (next) => { d.name = next; sync(); }),
-        h('code', {}, `{regler${d.n}}`),
+        editableName(d.name, (next) => (!varName(next) ? 'Bitte Buchstaben oder Ziffern verwenden.' : [...taken()].some((x) => varName(x) === varName(next) && x !== d.name.toLowerCase()) ? `„${next}“ gibt es schon.` : null), (next) => {
+          const chain = renames.find((r) => r.to === d.name);
+          if (chain) chain.to = next; else renames.push({ from: d.name, to: next });
+          d.name = next;
+          sync();
+        }),
+        h('code', { title: `Auch {regler${d.n}}` }, `{${varName(d.name)}}`),
         minBtn, maxBtn,
-        h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: () => { if (busy) return; dials.splice(dials.indexOf(d), 1); sync(); } }, '×')),
+        h('button', {
+          type: 'button', class: 'btn ghost small', title: 'Löschen',
+          onclick: async () => {
+            if (busy) return;
+            if (!(await confirmUnused(varName(d.name), [varName(d.name), `regler${d.n}`], d.n))) return;
+            dials.splice(dials.indexOf(d), 1);
+            sync();
+          },
+        }, '×')),
       info, confirm);
   }
 
