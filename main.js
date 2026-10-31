@@ -339,6 +339,7 @@ function getState() {
     keywordConflicts: modules?.keywordConflicts() ?? {},
     language: config.get('language') || { code: 'en', at: 0 },
     moduleIcons: config.get('moduleIcons') || {},
+    defaultIcons: defaultIcons(),
     i18nStamp: modules.i18nStamp,
     reservedNames: Object.fromEntries(modules?.moduleNames() ?? []),
     update: updater.state,
@@ -383,6 +384,19 @@ function setLanguage(code, at = Date.now()) {
   return config.get('language');
 }
 handle('app:language', (code) => setLanguage(String(code || '')));
+
+// Standardbilder der Modul-Kacheln: assets/module-icons/<id>.png – Datei austauschen = neues Standardbild
+let iconList = null;
+function defaultIcons() {
+  if (!iconList) {
+    try {
+      iconList = fs.readdirSync(path.join(__dirname, 'assets', 'module-icons')).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4));
+    } catch {
+      iconList = [];
+    }
+  }
+  return iconList;
+}
 handle('app:i18n', () => modules.i18n || {});
 // Eigenes Modul-Symbol (Einstellungen): fertig zugeschnittenes 256-px-PNG als data-URL – null = wieder das Standard-Symbol
 handle('modules:icon', (id, dataUrl) => {

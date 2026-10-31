@@ -37,6 +37,8 @@ function tile(mod) {
   // Eigenes Symbol aus den Einstellungen hat Vorrang
   const icon = state?.moduleIcons?.[mod.id];
   if (icon) return h('div', { class: 'tile has-icon' }, h('img', { src: icon, alt: '' }));
+  // Standardbild aus assets/module-icons/
+  if (state?.defaultIcons?.includes(mod.id)) return h('div', { class: 'tile has-icon' }, h('img', { src: `../assets/module-icons/${mod.id}.png`, alt: '' }));
   const badge = mod.badge || mod.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 3);
   return h('div', { class: 'tile', style: mod.accent ? `--tile:${mod.accent}` : null }, badge);
 }
