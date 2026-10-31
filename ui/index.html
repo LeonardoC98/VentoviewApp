@@ -47,12 +47,16 @@
       </div>
       <p class="intro">
         Eigene Keywords benutzt du im Editor jedes Moduls, z. B. <code>{streamer}</code> in einem Text – sie stehen dort unter
-        „Variablen → Ventoview“. Ein Keyword kann ein fester Text sein oder laufend neu gelesen werden: aus einer Datei,
-        einem PowerShell-Befehl, einer Webadresse oder eigenem Python-Code. Fest eingebaut sind <code>{zeit}</code>, <code>{datum}</code>,
-        <code>{wochentag}</code> und <code>{laufzeit}</code>.
+        „Variablen → Ventoview“. Der Wert kann ein fester Text sein oder laufend neu gelesen werden: aus einer Textdatei oder
+        von einer Webadresse. Mit „Erweitert“ kommen PowerShell-Befehle und eigener Python-Code dazu. Fest eingebaut sind
+        <code>{zeit}</code>, <code>{datum}</code>, <code>{wochentag}</code> und <code>{laufzeit}</code>.
       </p>
       <form class="panel wide" id="keywordsForm">
-        <div class="kw-head"><span>Keyword</span><span>Quelle</span><span>Wert / Ziel</span><span>Alle</span><span>Aktueller Wert</span><span></span></div>
+        <label class="kw-advanced" title="PowerShell-Befehle und Python-Code laufen mit deinen Rechten auf diesem PC">
+          <span class="switch"><input type="checkbox" id="kwAdvanced"><span></span></span>
+          <span>Erweitert: PowerShell-Befehle und Python-Code</span>
+        </label>
+        <div class="kw-head"><span>Keyword</span><span>Wert aus</span><span>Inhalt</span><span>Alle</span><span>Aktueller Wert</span><span></span></div>
         <p class="kw-conflicts" id="keywordConflicts" role="alert" hidden></p>
         <div id="keywordRows"></div>
         <div class="actions">
@@ -70,15 +74,17 @@
       <details class="help panel wide">
         <summary>So bindest du eigene Daten ein</summary>
         <div class="help-body">
-          <p><strong>Text</strong> – feste Angaben wie dein Name, Discord oder deine PC-Teile. Ändert sich nur, wenn du ihn änderst.</p>
-          <p><strong>Datei</strong> – der Inhalt einer Textdatei. Viele Stream-Tools (Musik-Player, Bots, Spendentools) können Infos
+          <p>Unter „Wert aus“ wählst du, woher ein Keyword seinen Wert bekommt:</p>
+          <p><strong>Fester Text</strong> – feste Angaben wie dein Name, Discord oder deine PC-Teile. Ändert sich nur, wenn du ihn änderst.</p>
+          <p><strong>Textdatei</strong> – der Inhalt einer Textdatei. Viele Stream-Tools (Musik-Player, Bots, Spendentools) können Infos
             in eine .txt-Datei schreiben. Ventoview liest sie im eingestellten Abstand und zeigt immer den neuesten Stand.</p>
-          <p><strong>Befehl</strong> – die Ausgabe eines PowerShell-Befehls. Damit kommst du an fast alles, was Windows weiß.
+          <p><strong>PowerShell-Befehl</strong> (Erweitert) – die Ausgabe eines PowerShell-Befehls. Damit kommst du an fast alles, was Windows weiß.
             Teste den Befehl zuerst in PowerShell: Was dort als Text herauskommt, wird der Wert. Langsame Befehle lieber selten ausführen (30–300 s).</p>
           <p><strong>Webadresse</strong> – die Antwort einer Adresse, z. B. eines Programms mit eingebautem Webserver oder einer API.
-            Mit dem JSON-Pfad holst du ein einzelnes Feld heraus: <code>data.title</code>, <code>items[0].name</code> –
+            Liefert sie nur Text (z. B. <code>https://wttr.in/Heide?format=%t</code> für das Wetter), bleibt der JSON-Pfad leer.
+            Bei JSON holst du mit dem Pfad ein einzelnes Feld heraus: <code>data.title</code>, <code>items[0].name</code> –
             oder du suchst im ganzen Baum: <code>**[Text~Tctl].Value</code> nimmt das erste Objekt, dessen „Text“ „Tctl“ enthält.</p>
-          <p><strong>Python</strong> – eigener Code, der aus anderen Variablen neue macht. Alle Variablen stehen unter ihrem Namen bereit,
+          <p><strong>Python-Code</strong> (Erweitert) – eigener Code, der aus anderen Variablen neue macht. Alle Variablen stehen unter ihrem Namen bereit,
             Zahlen schon als Zahlen: <code>test = 2 * ping</code> ergibt bei 42 ms „84“. Den Wert setzt du mit dem Namen des Keywords
             (sonst zählt <code>ergebnis = …</code> oder was der Code mit <code>print</code> ausgibt). <code>True</code>/<code>False</code> werden
             zu „ja“/„nein“, ein Wörterbuch wie <code>{"a": 1}</code> zu eigenen Variablen (<code>{test_a}</code>). <code>speicher</code> merkt sich

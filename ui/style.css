@@ -196,7 +196,7 @@ main { flex: 1; overflow-y: auto; padding: 8px 20px 32px; }
 code { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: var(--accent-2); font: 12.5px Consolas, monospace; }
 #tab-keywords .panel { margin-top: 14px; }
 .panel.wide { max-width: none; }
-.kw-head, .kw-row { display: grid; grid-template-columns: 140px 112px minmax(0, 1fr) 76px 200px 34px; gap: 8px; align-items: start; }
+.kw-head, .kw-row { display: grid; grid-template-columns: 140px 170px minmax(0, 1fr) 76px 200px 34px; gap: 8px; align-items: start; }
 .kw-head { padding: 14px 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
 .kw-row { padding: 5px 0; border-bottom: 1px solid rgba(42, 42, 53, .6); }
 .kw-row input, .kw-row select, .kw-row textarea {
@@ -545,3 +545,8 @@ code { background: rgba(255, 255, 255, .06); }
 /* Alle Auswahllisten (Keyword-Quelle, Modul-Einstellungen, Chat-Bot …) mit dunkler, lesbarer Liste wie die Sprachauswahl */
 select { color-scheme: dark; }
 select option { background: #17171f; color: #f2f2f5; }
+
+/* Keywords: Schalter „Erweitert“ und die Art auf den Beispielkarten */
+.kw-advanced { display: flex; align-items: center; gap: 10px; padding: 10px 0 2px; color: var(--muted); font-size: 13px; cursor: pointer; }
+.kw-advanced:hover { color: var(--text); }
+.kw-kind { align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: rgba(139, 92, 246, .14); color: var(--accent-2); font-size: 11px; font-weight: 600; }

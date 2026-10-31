@@ -875,19 +875,46 @@ function updateSuggestions() {
 
 // ---------- Eigene Keywords ----------
 
+// Woher ein Keyword seinen Wert holt. Fester Text, Textdatei und Webadresse lesen nur; Befehl und Python führen
+// etwas aus und stehen deshalb erst zur Wahl, wenn „Erweitert“ eingeschaltet ist.
 const SOURCES = {
-  text: { label: 'Text', placeholder: 'Wert, z. B. Vento', interval: null },
-  file: { label: 'Datei', placeholder: 'C:\\Stream\\song.txt', interval: 2 },
-  command: { label: 'Befehl', placeholder: 'PowerShell-Befehl, z. B. (Get-Date).Year', interval: 30 },
+  text: { label: 'Fester Text', placeholder: 'Wert, z. B. Vento', interval: null },
+  file: { label: 'Textdatei', placeholder: 'C:\\Stream\\song.txt', interval: 2 },
   url: { label: 'Webadresse', placeholder: 'https://…', interval: 30 },
-  python: { label: 'Python', placeholder: 'test = ping * 2  # andere Variablen einfach mit Namen nutzen', interval: 5 },
+  command: { label: 'PowerShell-Befehl', placeholder: 'PowerShell-Befehl, z. B. (Get-Date).Year', interval: 30, advanced: true },
+  python: { label: 'Python-Code', placeholder: 'test = ping * 2  # andere Variablen einfach mit Namen nutzen', interval: 5, advanced: true },
+};
+const ADVANCED_KEY = 'vv-keyword-advanced';
+const advancedOn = () => {
+  try { return localStorage.getItem(ADVANCED_KEY) === '1'; } catch { return false; }
 };
 
+// Beispiele zum Übernehmen – mindestens eins pro Art, in der Reihenfolge der Arten
 const EXAMPLES = [
   {
-    title: 'Name der Grafikkarte',
-    text: 'Fragt Windows alle 5 Minuten nach deiner GPU. (Das Basic-Modul liefert {gpu} auch fertig.)',
-    keyword: { key: 'grafikkarte', source: 'command', target: '(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name', interval: 300 },
+    title: 'Fester Text',
+    text: 'Z. B. dein Name, Discord oder deine PC-Teile.',
+    keyword: { key: 'streamer', source: 'text', value: 'Dein Name' },
+  },
+  {
+    title: 'Song aus einer Textdatei',
+    text: 'Für Musik-Tools, die den aktuellen Song in eine .txt-Datei schreiben.',
+    keyword: { key: 'song', source: 'file', target: 'C:\\Stream\\song.txt', interval: 2 },
+  },
+  {
+    title: 'Wetter in deiner Stadt',
+    text: 'Temperatur von wttr.in, alle 10 Minuten. Stadt in der Adresse ändern (z. B. Berlin statt Heide).',
+    keyword: { key: 'wetter', source: 'url', target: 'https://wttr.in/Heide?format=%t', interval: 600 },
+  },
+  {
+    title: 'CPU-Temperatur',
+    text: 'Webadresse mit JSON-Pfad. Braucht LibreHardwareMonitor mit eingeschaltetem Webserver (siehe Anleitung unten).',
+    keyword: { key: 'cputemp', source: 'url', target: 'http://localhost:8085/data.json', path: '**[Text~Tctl].Value', interval: 3 },
+  },
+  {
+    title: 'Ping ins Internet',
+    text: 'Antwortzeit zu einem DNS-Server in Millisekunden, alle 10 Sekunden.',
+    keyword: { key: 'ping', source: 'command', target: '(Test-Connection 1.1.1.1 -Count 1).ResponseTime', interval: 10 },
   },
   {
     title: 'Mehrere PC-Infos auf einmal',
@@ -896,16 +923,6 @@ const EXAMPLES = [
       key: 'pc', source: 'command', interval: 300,
       target: "$os = Get-CimInstance Win32_OperatingSystem; @{ cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name.Trim(); system = $os.Caption; neustart = $os.LastBootUpTime.ToString('dd.MM. HH:mm') } | ConvertTo-Json -Compress",
     },
-  },
-  {
-    title: 'Ping ins Internet',
-    text: 'Antwortzeit zu einem DNS-Server in Millisekunden, alle 10 Sekunden.',
-    keyword: { key: 'ping', source: 'command', target: '(Test-Connection 1.1.1.1 -Count 1).ResponseTime', interval: 10 },
-  },
-  {
-    title: 'CPU-Temperatur',
-    text: 'Braucht LibreHardwareMonitor mit eingeschaltetem Webserver (siehe Anleitung unten).',
-    keyword: { key: 'cputemp', source: 'url', target: 'http://localhost:8085/data.json', path: '**[Text~Tctl].Value', interval: 3 },
   },
   {
     title: 'Mit Python rechnen',
@@ -917,23 +934,16 @@ const EXAMPLES = [
     text: 'Zählt, wie oft der Ping seit dem Start über 80 ms lag – „speicher“ bleibt zwischen den Läufen erhalten. Braucht {ping}.',
     keyword: { key: 'lags', source: 'python', target: 'if ping > 80:\n    speicher["n"] = speicher.get("n", 0) + 1\nlags = speicher.get("n", 0)', interval: 10 },
   },
-  {
-    title: 'Song aus einer Textdatei',
-    text: 'Für Musik-Tools, die den aktuellen Song in eine .txt-Datei schreiben.',
-    keyword: { key: 'song', source: 'file', target: 'C:\\Stream\\song.txt', interval: 2 },
-  },
-  {
-    title: 'Fester Text',
-    text: 'Z. B. dein Name, Discord oder deine PC-Teile.',
-    keyword: { key: 'streamer', source: 'text', value: 'Dein Name' },
-  },
 ];
 
 function keywordRow(entry = { source: 'text' }) {
   const source = SOURCES[entry.source] ? entry.source : 'text';
   const keyInput = h('input', { type: 'text', name: 'key', value: entry.key || '', placeholder: 'name', maxlength: 32, spellcheck: 'false' });
+  // Befehl und Python nur mit „Erweitert“ – eine Zeile, die sie schon nutzt, behält ihre Art
   const sourceSelect = h('select', { name: 'source' },
-    ...Object.entries(SOURCES).map(([id, s]) => h('option', { value: id }, s.label)));
+    ...Object.entries(SOURCES)
+      .filter(([id, s]) => !s.advanced || advancedOn() || id === source)
+      .map(([id, s]) => h('option', { value: id }, s.label)));
   sourceSelect.value = source;
   const target = h('div', { class: 'kw-target' });
   const interval = h('input', { type: 'number', name: 'interval', min: 1, max: 3600, value: entry.interval ?? SOURCES[source].interval ?? '' });
@@ -958,8 +968,8 @@ function keywordRow(entry = { source: 'text' }) {
   const buildTarget = (src) => {
     const value = src === 'text' ? entry.value ?? '' : entry.target ?? '';
     const main = src === 'command' || src === 'python'
-      ? h('textarea', { name: 'target', rows: src === 'python' ? Math.min(14, Math.max(3, String(value).split('\n').length + 1)) : 1, spellcheck: 'false', placeholder: SOURCES[src].placeholder, class: src === 'python' ? 'kw-code' : null }, value)
-      : h('input', { type: 'text', name: 'target', value, spellcheck: 'false', placeholder: SOURCES[src].placeholder });
+      ? h('textarea', { name: 'target', rows: src === 'python' ? Math.min(14, Math.max(3, String(value).split('\n').length + 1)) : 1, spellcheck: 'false', placeholder: VVI18n.t(SOURCES[src].placeholder), class: src === 'python' ? 'kw-code' : null }, value)
+      : h('input', { type: 'text', name: 'target', value, spellcheck: 'false', placeholder: VVI18n.t(SOURCES[src].placeholder) });
     const parts = [main];
     if (src === 'file') {
       parts.push(h('button', {
@@ -1069,8 +1079,10 @@ function fillKeywords() {
 }
 
 function renderExamples() {
-  $('keywordExamples').replaceChildren(...EXAMPLES.map((example) => h('div', { class: 'card example' },
+  const list = EXAMPLES.filter((example) => !SOURCES[example.keyword.source].advanced || advancedOn());
+  $('keywordExamples').replaceChildren(...list.map((example) => h('div', { class: 'card example' },
     h('div', { class: 'card-title' }, example.title, h('small', {}, `{${example.keyword.key}}`)),
+    h('span', { class: 'kw-kind' }, SOURCES[example.keyword.source].label),
     h('p', { class: 'card-desc' }, example.text),
     h('button', {
       class: 'btn', type: 'button',
@@ -1105,19 +1117,7 @@ $('keywordsForm').addEventListener('submit', async (event) => {
     if (used.length) notes.push(`{${r.from}} → {${r.to}}:\n${usageText(used)}`);
   }
   if (notes.length && !confirm(`Umbenannte Keywords werden benutzt – die Umbenennung wird dort übernommen:\n\n${notes.join('\n\n')}\n\nWeiter?`)) return;
-  const list = rows.map((row) => {
-    const source = row.querySelector('[name=source]').value;
-    const target = row.querySelector('[name=target]').value;
-    return {
-      key: row.querySelector('[name=key]').value,
-      source,
-      value: source === 'text' ? target : undefined,
-      target: source === 'text' ? undefined : target,
-      path: row.querySelector('[name=path]')?.value,
-      interval: row.querySelector('[name=interval]').value,
-      full: source === 'python' ? Boolean(row.querySelector('[name=full]')?.checked) : undefined,
-    };
-  });
+  const list = rows.map(readKeywordRow);
   const res = await api.saveKeywords(list, renames);
   if (res.ok) fillKeywords();
   $('keywordsMessage').classList.toggle('error', !res.ok);
@@ -1139,13 +1139,27 @@ document.querySelectorAll('.tabs button').forEach((tab) => {
     }
     if (tab.dataset.tab === 'keywords') {
       fillKeywords();
-      keywordWarning();
     }
     if (tab.dataset.tab === 'share') renderSharing();
   });
 });
 
-// Hinweis-Fenster beim Öffnen der Keywords: Befehle und Python laufen mit deinen Rechten
+// Eingaben einer Keyword-Zeile als Eintrag
+function readKeywordRow(row) {
+  const source = row.querySelector('[name=source]').value;
+  const target = row.querySelector('[name=target]').value;
+  return {
+    key: row.querySelector('[name=key]').value,
+    source,
+    value: source === 'text' ? target : undefined,
+    target: source === 'text' ? undefined : target,
+    path: row.querySelector('[name=path]')?.value,
+    interval: row.querySelector('[name=interval]').value,
+    full: source === 'python' ? Boolean(row.querySelector('[name=full]')?.checked) : undefined,
+  };
+}
+
+// Hinweis-Fenster beim Einschalten von „Erweitert“: Befehle und Python laufen mit deinen Rechten
 function keywordWarning() {
   try {
     if (localStorage.getItem('vv-keyword-warning-off') === '1') return;
@@ -1237,4 +1251,20 @@ api.getState().then((res) => {
   render();
   renderKeywordConflicts();
   fillSettings();
+});
+
+// „Erweitert“: PowerShell-Befehle und Python-Code zur Auswahl stellen – beim Einschalten der Sicherheitshinweis
+$('kwAdvanced').checked = advancedOn();
+$('kwAdvanced').addEventListener('change', (e) => {
+  try { localStorage.setItem(ADVANCED_KEY, e.target.checked ? '1' : '0'); } catch { /* egal */ }
+  if (e.target.checked) keywordWarning();
+  // Zeilen mit der neuen Auswahl neu aufbauen – Eingaben bleiben erhalten
+  const rows = [...$('keywordRows').children].map((row) => {
+    const next = keywordRow(readKeywordRow(row));
+    next.dataset.saved = row.dataset.saved;
+    return next;
+  });
+  $('keywordRows').replaceChildren(...rows);
+  renderExamples();
+  updateKeywordPreviews();
 });
