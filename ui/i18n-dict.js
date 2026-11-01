@@ -212,7 +212,7 @@ VVI18n.add({
   'Verbinden': ['Connect', 'Collega', 'Conectar', 'Connecter'],
   'Zur Kontoseite': ['To the account page', 'Alla pagina account', 'A la página de la cuenta', 'Vers la page du compte'],
   'Twitch': ['Twitch', 'Twitch', 'Twitch', 'Twitch'],
-  'Nicht verbunden – nötig für Stream Chat und Alerts (Bits, Abos, Follows, Raids, Kanalpunkte).': ['Not connected – needed for Stream Chat and alerts (bits, subs, follows, raids, channel points).', 'Non connesso – necessario per Stream Chat e alert (bits, abbonamenti, follow, raid, punti canale).', 'No conectado – necesario para el Stream Chat y alertas (bits, suscripciones, follows, raids, puntos de canal).', 'Non connecté – nécessaire pour le Stream Chat et les alertes (bits, abonnements, follows, raids, points de chaîne).'],
+  'Nicht verbunden – nötig für Stream-Chat und Alerts (Bits, Abos, Follows, Raids, Kanalpunkte).': ['Not connected – needed for Stream-Chat and alerts (bits, subs, follows, raids, channel points).', 'Non connesso – necessario per Stream-Chat e alert (bits, abbonamenti, follow, raid, punti canale).', 'No conectado – necesario para Stream-Chat y alertas (bits, suscripciones, follows, raids, puntos de canal).', 'Non connecté – nécessaire pour Stream-Chat et les alertes (bits, abonnements, follows, raids, points de chaîne).'],
   'Im Browser auf twitch.tv/activate den Code': ['In your browser, confirm the code', 'Nel browser conferma il codice', 'En el navegador confirma el código', 'Dans le navigateur, confirme le code'],
   'bestätigen …': ['on twitch.tv/activate …', 'su twitch.tv/activate …', 'en twitch.tv/activate …', 'sur twitch.tv/activate …'],
   'Abbrechen': ['Cancel', 'Annulla', 'Cancelar', 'Annuler'],
