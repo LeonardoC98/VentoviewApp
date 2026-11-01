@@ -212,6 +212,7 @@ async function init() {
     return result;
   });
   bridge.handle('library.remove', (msg) => library.remove(msg));
+  bridge.handle('library.saveAnimation', (msg) => library.saveAnimation(msg.animation));
   bridge.handle('hub.import', async (msg) => {
     const result = await sharing.importFromSite(String(msg.path || ''));
     for (const design of result.saved) bridge.designChanged(design.id, design);

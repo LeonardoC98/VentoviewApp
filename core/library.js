@@ -1,4 +1,5 @@
 // Bibliothek aus dem Hub: Vorlagen und Effekt-Pakete (in config.library), Medien landen bei den eigenen Medien.
+// Dazu eigene Animationen, die der Editor speichert (Rein, Raus, bei Auslöser) – für alle Designs auf diesem PC.
 // Pro-Inhalte lädt die App mit ihrem Lizenzschein – der Server liefert sie nur bei aktivem Ventoview Pro.
 // Standard-Vorlagen der Module lassen sich im Editor ausblenden (hidden) und über den Hub zurückholen.
 'use strict';
@@ -26,6 +27,7 @@ class Library {
       templates: Array.isArray(lib.templates) ? lib.templates : [],
       effects: Array.isArray(lib.effects) ? lib.effects : [],
       hidden: Array.isArray(lib.hidden) ? lib.hidden : [],
+      animations: Array.isArray(lib.animations) ? lib.animations : [],
     };
   }
 
@@ -92,11 +94,37 @@ class Library {
     throw new Error('Unbekannter Hub-Eintrag.');
   }
 
-  // Aus Vorlagen bzw. Effekten entfernen; Standard-Vorlagen werden nur ausgeblendet
+  // Eigene Animation speichern (gleiche ID = ersetzen): Name, wofür gedacht (in/out/trigger), Länge, Rückweg,
+  // Spuren, benötigte Effekte und Auslöser-Regel – so, wie der Editor sie „zum Mitnehmen“ packt
+  saveAnimation(input = {}) {
+    if (!input || typeof input !== 'object') throw new Error('Keine Animation.');
+    if (JSON.stringify(input).length > MAX_JSON) throw new Error('Die Animation ist zu groß.');
+    const plain = (v, fallback) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : fallback);
+    const tracks = plain(input.tracks, {});
+    if (!Object.keys(tracks).length) throw new Error('Die Animation hat keine Keyframes.');
+    const lib = this.state();
+    const entry = {
+      id: /^[\w-]{1,40}$/.test(String(input.id || '')) ? String(input.id) : crypto.randomBytes(6).toString('hex'),
+      name: text(input.name, 80).trim() || 'Animation',
+      kind: ['in', 'out', 'trigger'].includes(input.kind) ? input.kind : 'trigger',
+      length: Math.min(600, Math.max(0.05, Number(input.length) || 1)),
+      back: Math.min(10, Math.max(0, Number(input.back) || 0)),
+      type: text(input.type, 20),
+      when: plain(input.when, { kind: 'none' }),
+      trigger: plain(input.trigger, null),
+      tracks,
+      fx: plain(input.fx, {}),
+      savedAt: Date.now(),
+    };
+    return this.save({ ...lib, animations: [...lib.animations.filter((a) => a.id !== entry.id), entry] });
+  }
+
+  // Aus Vorlagen, Effekten bzw. eigenen Animationen entfernen; Standard-Vorlagen werden nur ausgeblendet
   remove({ kind, id, module, name } = {}) {
     const lib = this.state();
     if (kind === 'template') return this.save({ ...lib, templates: lib.templates.filter((t) => t.id !== id) });
     if (kind === 'effect') return this.save({ ...lib, effects: lib.effects.filter((e) => e.id !== id) });
+    if (kind === 'animation') return this.save({ ...lib, animations: lib.animations.filter((a) => a.id !== id) });
     if (kind === 'standard') {
       const key = `${text(module, 40)}:${text(name, 120)}`;
       return this.save({ ...lib, hidden: [...new Set([...lib.hidden, key])] });
