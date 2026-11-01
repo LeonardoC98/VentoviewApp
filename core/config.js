@@ -5,6 +5,9 @@ const DEFAULTS = {
   port: 47800,
   siteUrl: 'http://localhost:8080',
   autostart: true,
+  // Audio-Schutz: harte Obergrenze für allen Ton in Overlays und Editor (dBFS). Standard an – abschalten oder
+  // lockern nur nach Warnung, der Zeitpunkt der Bestätigung steht in audioLimitRisk
+  audioLimit: { on: true, ceiling: -6 },
   trayHintShown: false,
   keywords: [], // eigene Keywords: [{ key, value }]
   // Sprache von App und Webseite: code + Zeitpunkt der Wahl (wer zuletzt gewählt hat, gewinnt beim Abgleich)

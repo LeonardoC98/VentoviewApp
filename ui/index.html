@@ -207,6 +207,17 @@
           </span>
           <span class="switch"><input type="checkbox" name="autostart"><span></span></span>
         </label>
+        <div class="row">
+          <span>
+            <strong>Audio-Schutz</strong>
+            <small>Harte Obergrenze für allen Ton in Overlays und Editor (Töne, Live-Audio, Videos) – schützt Gehör, Kopfhörer und Lautsprecher vor plötzlichen Spitzen. Wie laut es am Ende ist, bestimmen weiterhin deine Geräte.</small>
+          </span>
+          <span class="limit-ctrl">
+            <input type="number" name="limitCeiling" min="-30" max="0" step="1" title="Obergrenze in dBFS – je kleiner, desto leiser die lautesten Stellen">
+            <small>dB</small>
+            <span class="switch"><input type="checkbox" name="limitOn" aria-label="Audio-Schutz an"><span></span></span>
+          </span>
+        </div>
         <label class="row">
           <span>
             <strong>Port</strong>

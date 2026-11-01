@@ -37,7 +37,7 @@ const MEDIA_TYPES = {
  * WebSocket /audio?src=<quelle>    Live-Audio (Mikrofon, App, Systemsound) als rohe Pakete: 48 kHz, Stereo, 16 Bit
  */
 class Bridge {
-  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset, liveAudio }) {
+  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset, liveAudio, audioLimit }) {
     this.version = version;
     this.allowedOrigins = allowedOrigins; // () => string[]
     this.moduleState = moduleState;       // (id) => { installed, status }
@@ -45,6 +45,7 @@ class Bridge {
     this.moduleFile = moduleFile;         // (moduleId, name) => absoluter Pfad oder null
     this.uploadAsset = uploadAsset;       // ({ name, mime, length, stream }) => Promise<asset>
     this.liveAudio = liveAudio;           // { attach(ws, quelle) }
+    this.audioLimit = audioLimit;         // () => { on, ceiling } – Audio-Schutz für alle Overlays
     this.handlers = new Map();
     this.latest = new Map();              // Modul-ID → zuletzt gesendete Daten
     this.server = null;
@@ -228,7 +229,7 @@ class Bridge {
       }
       this.onMessage(ws, msg);
     });
-    this.send(ws, { type: 'hello', version: this.version });
+    this.send(ws, { type: 'hello', version: this.version, audioLimit: this.audioLimit?.() });
   }
 
   async onMessage(ws, msg) {
@@ -291,6 +292,11 @@ class Bridge {
   moduleChanged(id) {
     if (!this.moduleState(id).installed) this.latest.delete(id);
     this.broadcast((ws) => ws.modules.has(id), this.stateMessage(id));
+  }
+
+  // Audio-Schutz geändert: gilt sofort in allen offenen Overlays und Editoren
+  settingsChanged() {
+    this.broadcast(() => true, { type: 'settings', audioLimit: this.audioLimit?.() });
   }
 
   // Gespeichertes Design sofort an alle offenen Overlays schicken (kein Neuladen in OBS nötig)

@@ -565,3 +565,7 @@ select option { background: #17171f; color: #f2f2f5; }
 /* Erweiterungen: Knöpfe nebeneinander, Hinweis auf eine neuere Version */
 .btn-row { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ext-update { display: block; margin-top: 3px; color: #fbbf24; }
+
+/* Audio-Schutz: Grenze in dB und Schalter nebeneinander */
+.limit-ctrl { display: flex; align-items: center; gap: 8px; }
+.limit-ctrl input[type=number] { width: 72px; }

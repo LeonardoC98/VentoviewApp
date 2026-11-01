@@ -425,6 +425,11 @@ function fillSettings() {
   form.port.value = state.settings.port;
   form.siteUrl.value = state.settings.siteUrl;
   form.autostart.checked = state.settings.autostart;
+  const limit = state.settings.audioLimit || { on: true, ceiling: -6 };
+  form.limitOn.checked = limit.on !== false;
+  form.limitCeiling.value = limit.ceiling ?? -6;
+  form.limitCeiling.disabled = limit.on === false;
+  limitConfirmed = false;
   form.autostart.disabled = !state.installed;
   $('autostartHint').textContent = state.installed
     ? 'Ventoview startet beim Hochfahren unsichtbar im Tray.'
@@ -1403,6 +1408,30 @@ $('exportBtn').addEventListener('click', async () => {
   if (res.ok) $('shareMessage').textContent = `Exportiert nach ${res.result}. Den ganzen Ordner weitergeben – siehe „So teilst du“.`;
 });
 
+// Audio-Schutz abschalten oder lockern: erst nach Warnung. Strenger stellen geht ohne Rückfrage.
+const LIMIT_WARNING = 'Der Audio-Schutz begrenzt die Lautstärke aller Töne in deinen Overlays und im Editor. Er dient dem Schutz deines Gehörs und deiner Geräte (Kopfhörer, Lautsprecher) vor plötzlichen, sehr lauten Spitzen – z. B. durch eine laute Datei oder durch Effekte wie Gain und EQ.\n\nWenn du ihn abschaltest oder die Grenze erhöhst, geschieht das auf eigene Gefahr: Zu hohe Pegel können Gehör und Geräte dauerhaft schädigen. Ändere das nur, wenn du weißt, was du tust.\n\nTrotzdem ändern?';
+let limitConfirmed = false;
+function guardLimit(event) {
+  const form = $('settingsForm');
+  const before = state.settings.audioLimit || { on: true, ceiling: -6 };
+  const on = form.limitOn.checked;
+  const ceiling = Number(form.limitCeiling.value);
+  const riskier = !on || ceiling > (before.on === false ? 0 : Number(before.ceiling ?? -6));
+  if (riskier && !limitConfirmed) {
+    if (!confirm(LIMIT_WARNING)) {
+      form.limitOn.checked = before.on !== false;
+      form.limitCeiling.value = before.ceiling ?? -6;
+      form.limitCeiling.disabled = before.on === false;
+      return;
+    }
+    limitConfirmed = true;
+  }
+  form.limitCeiling.disabled = !on;
+  if (event?.type === 'change') form.requestSubmit();
+}
+$('settingsForm').limitOn.addEventListener('change', guardLimit);
+$('settingsForm').limitCeiling.addEventListener('change', guardLimit);
+
 $('settingsForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
@@ -1410,6 +1439,7 @@ $('settingsForm').addEventListener('submit', async (event) => {
     port: form.port.value,
     siteUrl: form.siteUrl.value,
     autostart: form.autostart.checked,
+    audioLimit: { on: form.limitOn.checked, ceiling: Number(form.limitCeiling.value), confirmed: limitConfirmed },
   });
   $('settingsMessage').classList.toggle('error', !res.ok);
   $('settingsMessage').textContent = res.ok ? 'Gespeichert.' : res.error;

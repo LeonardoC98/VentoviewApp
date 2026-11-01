@@ -79,6 +79,7 @@ async function init() {
   bridge = new Bridge({
     version: app.getVersion(),
     liveAudio,
+    audioLimit: () => config.get('audioLimit'),
     // Dazu die lokale Webseite (localhost:8080): Overlays in der Streaming-Software direkt vom eigenen PC laden –
     // ohne Tunnel und ohne dessen Warnseite
     allowedOrigins: () => [...new Set([originOf(config.get('siteUrl')), 'http://localhost:8080', 'http://127.0.0.1:8080'])],
@@ -341,7 +342,7 @@ function getState() {
     version: app.getVersion(),
     installed: INSTALLED,
     bridge: { port: bridge.port, error: bridgeError },
-    settings: { port: config.get('port'), siteUrl: config.get('siteUrl'), autostart: config.get('autostart') },
+    settings: { port: config.get('port'), siteUrl: config.get('siteUrl'), autostart: config.get('autostart'), audioLimit: config.get('audioLimit') },
     keywords: config.get('keywords'),
     keywordValues: keywordSources?.values ?? {},
     keywordErrors: keywordSources?.errors ?? {},
@@ -669,12 +670,27 @@ handle('settings:save', async (patch) => {
     next.siteUrl = url.href;
   }
   if ('autostart' in patch) next.autostart = Boolean(patch.autostart);
+  // Audio-Schutz: Grenze −30 … 0 dBFS. Wer ihn abschaltet oder lockert, hat die Warnung bestätigt – mit Zeitpunkt merken
+  let limitChanged = false;
+  if (patch.audioLimit && typeof patch.audioLimit === 'object') {
+    const ceiling = Math.round(Math.min(0, Math.max(-30, Number(patch.audioLimit.ceiling))) * 10) / 10;
+    if (!Number.isFinite(ceiling)) throw new Error('Die Grenze für den Audio-Schutz muss eine Zahl zwischen -30 und 0 dB sein.');
+    const limit = { on: patch.audioLimit.on !== false, ceiling };
+    const before = config.get('audioLimit') || {};
+    limitChanged = limit.on !== (before.on !== false) || limit.ceiling !== before.ceiling;
+    if (limitChanged) {
+      next.audioLimit = limit;
+      const riskier = !limit.on || limit.ceiling > (Number(before.ceiling) || -6);
+      if (riskier) next.audioLimitRisk = { at: new Date().toISOString(), ...limit, confirmed: Boolean(patch.audioLimit.confirmed) };
+    }
+  }
 
   const portChanged = next.port !== undefined && next.port !== config.get('port');
   const siteChanged = next.siteUrl !== undefined && next.siteUrl !== config.get('siteUrl');
   config.set(next);
 
   if (portChanged) await startBridge();
+  else if (limitChanged) bridge?.settingsChanged();
   if (siteChanged) await modules.fetchRegistry();
   applyAutostart();
   pushState();
