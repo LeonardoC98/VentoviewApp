@@ -99,17 +99,16 @@ class ModuleManager extends EventEmitter {
       onSettings: null,
       onAction: null,
       cleanups: [],
-      locked: !this.account?.allows(id),
+      locked: this.shouldLock(id),
+      wip: this.isWip(id),
       inactive: this.isInactive(id),
       needsExtension: Boolean(manifest.requires?.extension && !this.extensions?.has(manifest.requires.extension)),
     };
     this.running.set(id, entry);
 
-    // Ohne Freischaltung bleibt das Modul installiert, läuft aber nicht
+    // Ohne Freischaltung (oder „in Arbeit“ / unsichtbar) bleibt das Modul installiert, läuft aber nicht
     if (entry.locked) {
-      entry.status = this.account?.state().connected
-        ? { state: 'warn', text: 'Für dein Konto nicht freigeschaltet' }
-        : { state: 'warn', text: 'Erst mit deinem Ventoview-Konto verbinden' };
+      entry.status = this.lockedStatus(id);
       this.bridge.moduleChanged(id);
       this.emit('change');
       return;
@@ -286,11 +285,34 @@ class ModuleManager extends EventEmitter {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this.registry = await res.json();
       this.registryError = null;
+      this.syncLicense(); // Stand „in Arbeit“ / unsichtbar kann sich geändert haben
     } catch {
       this.registryError = `Webseite ${this.siteUrl()} ist nicht erreichbar.`;
     }
     this.emit('change');
     return this.registry;
+  }
+
+  // Stand von der Webseite (registry.json): unsichtbare Module blendet die App aus, „in Arbeit“ zeigt sie grau mit WIP.
+  // Beides läuft nicht – auch wenn ein älterer Lizenzschein es noch erlauben würde.
+  isHidden(id) {
+    return Boolean(this.registry?.hiddenModules?.includes(id));
+  }
+
+  isWip(id) {
+    return Boolean(this.registry?.modules?.some((m) => m.id === id && m.status === 'wip'));
+  }
+
+  shouldLock(id) {
+    return !this.account?.allows(id) || this.isWip(id) || this.isHidden(id);
+  }
+
+  lockedStatus(id) {
+    if (this.isHidden(id)) return { state: 'idle', text: 'Nicht mehr verfügbar' };
+    if (this.isWip(id)) return { state: 'idle', text: 'In Arbeit – gerade nicht nutzbar' };
+    return this.account?.state().connected
+      ? { state: 'warn', text: 'Für dein Konto nicht freigeschaltet' }
+      : { state: 'warn', text: 'Erst mit deinem Ventoview-Konto verbinden' };
   }
 
   async install(id) {
@@ -302,6 +324,7 @@ class ModuleManager extends EventEmitter {
       const info = registry?.modules?.find((m) => m.id === id);
       if (!info) throw new Error(this.registryError || 'Modul nicht gefunden.');
       if (!this.supports(info)) throw new Error(`„${info.name}“ braucht Ventoview ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
+      if (info.status === 'wip') throw new Error(`„${info.name}“ ist gerade in Arbeit.`);
       if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem Ventoview-Konto (Einstellungen → Ventoview-Konto).');
       // Gerade gekauft oder Abo abgeschlossen? Der Lizenzschein wird sonst nur stündlich erneuert
       if (!this.account.allows(id)) await this.account.refresh();
@@ -409,7 +432,7 @@ class ModuleManager extends EventEmitter {
   async autoInstall() {
     if (!this.registry || !this.account?.state().connected) return;
     for (const info of this.registry.modules || []) {
-      if (this.busy.has(info.id) || !this.account.allows(info.id) || !this.supports(info)) continue;
+      if (this.busy.has(info.id) || info.status === 'wip' || !this.account.allows(info.id) || !this.supports(info)) continue;
       const current = this.running.get(info.id)?.manifest.version;
       if (current && current === info.version) continue;
       await this.install(info.id).catch((err) => console.error(`Modul "${info.id}" konnte nicht geladen werden:`, err.message));
@@ -444,7 +467,7 @@ class ModuleManager extends EventEmitter {
     for (const [id, entry] of [...this.running.entries()]) {
       // Freischaltung geändert – oder ein Namenskonflikt ist inzwischen gelöst (Generator/Keyword umbenannt)
       const resolved = entry.conflict && !this.conflictMessage(id, entry.manifest);
-      if ((entry.locked === !this.account?.allows(id) && !resolved) || this.busy.has(id)) continue;
+      if ((entry.locked === this.shouldLock(id) && entry.wip === this.isWip(id) && !resolved) || this.busy.has(id)) continue;
       changed = true;
       await this.stop(id);
       await this.start(id).catch((err) => console.error(`Modul "${id}" konnte nicht gestartet werden:`, err));
@@ -473,11 +496,12 @@ class ModuleManager extends EventEmitter {
 
   list() {
     const available = this.registry?.modules ?? [];
-    const installed = [...this.running.entries()].map(([id, { manifest, status, settings, suggestions, locked, inactive, needsExtension }]) => {
+    const installed = [...this.running.entries()].filter(([id]) => !this.isHidden(id)).map(([id, { manifest, status, settings, suggestions, locked, wip, inactive, needsExtension }]) => {
       const latest = available.find((m) => m.id === id);
       return {
         ...manifest,
         locked,
+        wip,
         inactive,
         needsExtension,
         status,
@@ -491,7 +515,7 @@ class ModuleManager extends EventEmitter {
       installed,
       available: available
         .filter((m) => !this.running.has(m.id))
-        .map((m) => ({ ...m, busy: this.busy.has(m.id), unsupported: !this.supports(m), locked: !this.account?.allows(m.id) })),
+        .map((m) => ({ ...m, busy: this.busy.has(m.id), unsupported: !this.supports(m), locked: !this.account?.allows(m.id), wip: m.status === 'wip' })),
       registryError: this.registryError,
     };
   }

@@ -170,7 +170,7 @@ async function init() {
   // Für die Webseite (Home, Module): Liste der Module, aktiv/inaktiv, Anordnung des Home-Bildschirms
   bridge.handle('modules.list', () => modules.list().installed.map((m) => ({
     id: m.id, name: m.name, version: m.version, accent: m.accent, badge: m.badge, icon: config.get('moduleIcons')?.[m.id] || null,
-    locked: m.locked, inactive: m.inactive, needsExtension: m.needsExtension, requires: m.requires || null, status: m.status,
+    locked: m.locked, wip: Boolean(m.wip), inactive: m.inactive, needsExtension: m.needsExtension, requires: m.requires || null, status: m.status,
   })));
   bridge.handle('module.active', (msg) => modules.setActive(String(msg.module), Boolean(msg.active)));
   // Sprache: die Webseite fragt nach und übernimmt die neuere Wahl – oder gibt ihre neuere an die App

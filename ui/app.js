@@ -127,6 +127,15 @@ function gearIcon() {
 
 function installedCard(mod) {
   const status = mod.status || { state: 'idle', text: '' };
+  // In Arbeit: grau mit WIP, keine Knöpfe – nutzbar wird es erst, wenn es auf der Webseite wieder aktiv ist
+  if (mod.wip) {
+    return h('div', { class: 'card wip' },
+      tile(mod),
+      h('div', { class: 'card-body' },
+        h('div', { class: 'card-title' }, mod.name, h('small', {}, `v${mod.version}`), h('span', { class: 'badge wip' }, 'WIP')),
+        h('div', { class: 'card-status' }, h('span', { class: 'dot idle' }), status.text || 'In Arbeit – gerade nicht nutzbar')),
+      h('div', { class: 'card-actions' }));
+  }
   return h('div', { class: 'card' },
     tile(mod),
     h('div', { class: 'card-body' },
@@ -190,7 +199,9 @@ function availableCard(mod) {
       h('div', { class: 'card-title' }, mod.name, h('small', {}, `v${mod.version}`), plan),
     ),
     h('p', { class: 'card-desc' }, mod.description),
-    mod.unsupported
+    mod.wip
+      ? h('button', { class: 'btn', type: 'button', disabled: true }, 'In Arbeit')
+      : mod.unsupported
       ? h('button', { class: 'btn', type: 'button', disabled: true, title: 'Erst die App aktualisieren (Einstellungen → Updates)' }, `Braucht App ${mod.minApp}`)
       : mod.locked
         ? h('button', { class: 'btn', type: 'button', onclick: () => run('openAccount') }, state.account?.connected ? 'Freischalten' : 'Erst Konto verbinden')
@@ -206,9 +217,11 @@ function render() {
   dot.className = `dot ${bridge.error ? 'error' : 'ok'}`;
   $('serviceText').textContent = bridge.error || `Lokaler Dienst aktiv · Port ${bridge.port}`;
 
-  // Oben nur, was freigeschaltet ist – gesperrte Module (z. B. Abo beendet) stehen unten bei „Module entdecken“
-  const mine = installed.filter((m) => !m.locked);
-  const locked = installed.filter((m) => m.locked);
+  // Oben, was freigeschaltet ist (und „in Arbeit“ grau) – gesperrte Module (z. B. Abo beendet) stehen unten bei „Module entdecken“.
+  // Sortiert: eingeschaltete zuerst, dann ausgeschaltete, dann „in Arbeit“ – jeweils nach Name
+  const rank = (m) => (m.wip ? 2 : m.inactive ? 1 : 0);
+  const mine = installed.filter((m) => !m.locked || m.wip).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, 'de'));
+  const locked = installed.filter((m) => m.locked && !m.wip);
   $('installed').replaceChildren(...(mine.length
     ? mine.map(installedCard)
     : [h('div', { class: 'empty' }, state.account?.connected ? 'Module werden geladen …' : 'Verbinde die App mit deinem Konto (Einstellungen) – deine Module erscheinen dann von selbst.')]));
