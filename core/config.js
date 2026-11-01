@@ -3,7 +3,8 @@ const path = require('node:path');
 
 const DEFAULTS = {
   port: 47800,
-  siteUrl: 'http://localhost:8080',
+  // Vorerst die Test-Adresse über ngrok – später die eigene Domain. Lokal: in den Einstellungen auf http://localhost:8080 stellen
+  siteUrl: 'https://schnapps-trance-vitally.ngrok-free.dev',
   autostart: true,
   // Audio-Schutz: harte Obergrenze für allen Ton in Overlays und Editor (dBFS). Standard an – abschalten oder
   // lockern nur nach Warnung, der Zeitpunkt der Bestätigung steht in audioLimitRisk
