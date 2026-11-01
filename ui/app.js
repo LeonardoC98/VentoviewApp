@@ -365,7 +365,7 @@ function renderTwitch() {
   const tw = state.twitch || { status: 'off' };
   const panel = $('twitchPanel');
   const text = {
-    off: 'Nicht verbunden – nötig für Twitch-Chat und Alerts (Bits, Abos, Follows, Raids, Kanalpunkte).',
+    off: 'Nicht verbunden – nötig für Stream Chat und Alerts (Bits, Abos, Follows, Raids, Kanalpunkte).',
     error: tw.error,
     connected: `Verbunden als ${tw.login}`,
   }[tw.status];

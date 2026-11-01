@@ -6,7 +6,7 @@ const CLIENT_ID = '0j2rkj9nzvqtayn5a71icucgr5b93r';
 const SCOPES = 'user:read:chat bits:read channel:read:subscriptions moderator:read:followers channel:read:redemptions user:write:chat user:manage:whispers';
 
 /**
- * Twitch-Verbindung der App (für Module wie Twitch-Chat und Alerts). Anmeldung per Gerätecode:
+ * Twitch-Verbindung der App (für Module wie Stream Chat und Alerts). Anmeldung per Gerätecode:
  * Twitch zeigt einen Code, der Nutzer bestätigt ihn auf twitch.tv/activate. Die Tokens bleiben auf diesem PC
  * (verschlüsselt mit Windows, falls verfügbar).
  */
