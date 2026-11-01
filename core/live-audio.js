@@ -3,10 +3,12 @@
 // Streaming-Software den Ton aus der Browserquelle, statt das Gerät selbst einzubinden.
 //
 // Quellen:
-//   in:<Geräte-ID>   Eingang (Mikrofon, Line-In, virtuelles Kabel …) – über ein verstecktes Fenster (Chromium)
+//   mic:<Windows-ID> Eingang (Mikrofon, Line-In, virtuelles Kabel …), mic:default = Standard-Mikrofon von Windows
 //   sys              alles, was der PC abspielt (Loopback des Standard-Wiedergabegeräts)
 //   app:<prozess>    nur ein Programm, z. B. app:spotify (Process Loopback, ab Windows 10 2004)
-// sys und app laufen über audio-capture.ps1. Aufgenommen wird nur, solange ein Overlay zuhört.
+//   in:<Geräte-ID>   ältere Eingänge über ein verstecktes Fenster (Chromium); in:default läuft wie mic:default
+// mic, sys und app laufen über audio-capture.ps1 – direkt über Windows, im Takt des Geräts, mit wenig Verzögerung.
+// Aufgenommen wird nur, solange ein Overlay zuhört.
 'use strict';
 
 const fs = require('node:fs');
@@ -17,7 +19,7 @@ const { app, BrowserWindow, ipcMain, session } = require('electron');
 const MAX_BUFFERED = 256 * 1024; // hängt ein Overlay hinterher, lieber Pakete auslassen als Verzögerung aufbauen
 const IDLE_MS = 3000;            // ohne Zuhörer noch kurz weiterlaufen (Overlay lädt neu)
 const RETRY_MS = 3000;           // Gerät/Programm nicht da: so oft neu versuchen
-const SOURCE = /^(in:[\w\-=+/.]{1,200}|sys|app:[\w .\-]{1,80})$/;
+const SOURCE = /^(in:[\w\-=+/.]{1,200}|mic:[\w{}.\-]{1,160}|sys|app:[\w .\-]{1,80})$/;
 
 class LiveAudio {
   constructor() {
@@ -93,10 +95,10 @@ class LiveAudio {
     });
   }
 
-  // Programme, die gerade Ton ausgeben können → [{ name, title }]
-  apps() {
+  // Programme, die gerade Ton ausgeben können → [{ name, title }]; mode 'inputs': Eingänge → [{ id, name }]
+  apps(mode = 'list') {
     return new Promise((resolve) => {
-      const child = this.run(['-Mode', 'list']);
+      const child = this.run(['-Mode', mode]);
       let out = '';
       child.stdout.setEncoding('utf8');
       child.stdout.on('data', (chunk) => { out += chunk; });
@@ -109,13 +111,13 @@ class LiveAudio {
 
   // Alle Quellen zum Auswählen → [{ id, label, kind: 'input' | 'system' | 'app' }]
   async list() {
-    const [inputs, apps] = await Promise.all([this.request({ type: 'list' }).catch(() => []), this.apps()]);
+    const [inputs, apps] = await Promise.all([this.apps('inputs'), this.apps()]);
+    // Ohne Windows-Liste (sollte nicht vorkommen) wie früher über das versteckte Fenster
+    const legacy = inputs.length ? [] : await this.request({ type: 'list' }).catch(() => []);
     return [
-      ...inputs.filter((d) => d.deviceId !== 'communications').map((d) => ({
-        id: `in:${d.deviceId}`,
-        label: d.deviceId === 'default' ? 'Standard-Mikrofon (wie in Windows eingestellt)' : d.label || 'Eingang',
-        kind: 'input',
-      })),
+      { id: 'mic:default', label: 'Standard-Mikrofon (wie in Windows eingestellt)', kind: 'input' },
+      ...inputs.map((d) => ({ id: `mic:${d.id}`, label: d.name || 'Eingang', kind: 'input' })),
+      ...legacy.filter((d) => !['default', 'communications'].includes(d.deviceId)).map((d) => ({ id: `in:${d.deviceId}`, label: d.label || 'Eingang', kind: 'input' })),
       { id: 'sys', label: 'Systemsound – alles, was der PC abspielt', kind: 'system' },
       ...apps.map((a) => ({ id: `app:${a.name}`, label: a.title || a.name, kind: 'app' })),
     ];
@@ -150,7 +152,7 @@ class LiveAudio {
   }
 
   start(src) {
-    if (src.id.startsWith('in:')) {
+    if (src.id.startsWith('in:') && src.id !== 'in:default') {
       const deviceId = src.id.slice(3);
       src.stop = () => this.win?.webContents.send('liveaudio:cmd', { type: 'stop', id: src.id });
       this.request({ type: 'start', id: src.id, deviceId }).catch((err) => {
@@ -159,7 +161,11 @@ class LiveAudio {
       });
       return;
     }
-    const child = this.run(src.id === 'sys' ? ['-Mode', 'sys'] : ['-Mode', 'app', '-Name', src.id.slice(4)]);
+    const args = src.id === 'sys' ? ['-Mode', 'sys']
+      : src.id === 'in:default' ? ['-Mode', 'mic', '-Name', 'default']
+        : src.id.startsWith('mic:') ? ['-Mode', 'mic', '-Name', src.id.slice(4)]
+          : ['-Mode', 'app', '-Name', src.id.slice(4)];
+    const child = this.run(args);
     let rest = Buffer.alloc(0);
     // Pakete können mitten in einem Sample enden – immer ganze Stereo-Samples (4 Byte) weitergeben
     child.stdout.on('data', (chunk) => {

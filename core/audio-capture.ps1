@@ -1,7 +1,9 @@
-# Live-Audio für Overlays: nimmt den Ton des ganzen PCs (Mode sys) oder eines einzelnen Programms (Mode app, Name =
-# Prozessname, z. B. spotify – Process Loopback ab Windows 10 2004) auf und schreibt ihn roh auf stdout:
-# 48 kHz, Stereo, 16 Bit, little endian – ohne Kopf, Paket für Paket, so wie Windows ihn liefert.
-# Mode list gibt stattdessen die Programme, die gerade Ton ausgeben können, als JSON aus: [{"name":"spotify","title":"Spotify"}]
+# Live-Audio für Overlays: nimmt den Ton des ganzen PCs (Mode sys), eines einzelnen Programms (Mode app, Name =
+# Prozessname, z. B. spotify – Process Loopback ab Windows 10 2004) oder eines Eingangs wie dem Mikrofon (Mode mic,
+# Name = Geräte-ID oder default) auf und schreibt ihn roh auf stdout: 48 kHz, Stereo, 16 Bit, little endian – ohne Kopf,
+# Paket für Paket, so wie Windows ihn liefert (im Takt des Geräts, ohne Umweg über den Browser).
+# Mode list gibt stattdessen die Programme, die gerade Ton ausgeben können, als JSON aus: [{"name":"spotify","title":"Spotify"}],
+# Mode inputs die Eingänge: [{"id":"{0.0.1.…}","name":"Mikrofon (…)"}]
 param([string]$Mode = 'list', [string]$Name = '')
 
 $ErrorActionPreference = 'Stop'
@@ -19,13 +21,36 @@ using System.Threading;
 
 [ComImport, Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IVvDeviceEnumerator {
-  [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IntPtr devices);
+  [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IVvDeviceCollection devices);
   [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IVvDevice device);
+  [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IVvDevice device);
+}
+
+[ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IVvDeviceCollection {
+  [PreserveSig] int GetCount(out uint count);
+  [PreserveSig] int Item(uint index, out IVvDevice device);
 }
 
 [ComImport, Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 interface IVvDevice {
   [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object result);
+  [PreserveSig] int OpenPropertyStore(int access, out IVvPropertyStore store);
+  [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
+  [PreserveSig] int GetState(out int state);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+struct VvPropertyKey { public Guid fmtid; public int pid; }
+
+[StructLayout(LayoutKind.Sequential)]
+struct VvPropVariant { public ushort vt; public ushort r1; public ushort r2; public ushort r3; public IntPtr p; public IntPtr p2; }
+
+[ComImport, Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IVvPropertyStore {
+  [PreserveSig] int GetCount(out uint count);
+  [PreserveSig] int GetAt(uint index, out VvPropertyKey key);
+  [PreserveSig] int GetValue(ref VvPropertyKey key, out VvPropVariant value);
 }
 
 [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -160,6 +185,46 @@ public static class VvCapture {
     return sb.ToString();
   }
 
+  // Eingänge (Mikrofone, Line-In, virtuelle Kabel) mit ihrem Namen aus Windows
+  public static void Inputs() {
+    var parts = new List<string>();
+    var enumerator = (IVvDeviceEnumerator)new VvEnumeratorCom();
+    IVvDeviceCollection devices;
+    if (enumerator.EnumAudioEndpoints(1, 1, out devices) == 0 && devices != null) { // Aufnahme, nur aktive
+      uint count;
+      devices.GetCount(out count);
+      var nameKey = new VvPropertyKey { fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"), pid = 14 };
+      for (uint i = 0; i < count; i++) {
+        IVvDevice device;
+        if (devices.Item(i, out device) != 0 || device == null) continue;
+        string id;
+        if (device.GetId(out id) != 0 || id == null) continue;
+        string name = id;
+        IVvPropertyStore store;
+        if (device.OpenPropertyStore(0, out store) == 0 && store != null) {
+          VvPropVariant value;
+          if (store.GetValue(ref nameKey, out value) == 0 && value.vt == 31 && value.p != IntPtr.Zero) name = Marshal.PtrToStringUni(value.p);
+        }
+        parts.Add("{\"id\":\"" + Json(id) + "\",\"name\":\"" + Json(name) + "\"}");
+      }
+    }
+    var stdout = new StreamWriter(Console.OpenStandardOutput(), new UTF8Encoding(false));
+    stdout.Write("[" + String.Join(",", parts) + "]");
+    stdout.Flush();
+  }
+
+  static IVvAudioClient InputClient(string id) {
+    var enumerator = (IVvDeviceEnumerator)new VvEnumeratorCom();
+    IVvDevice device;
+    int hr = id == "default" ? enumerator.GetDefaultAudioEndpoint(1, 0, out device) : enumerator.GetDevice(id, out device);
+    if (hr != 0 || device == null) throw new Exception("Eingang nicht gefunden");
+    var iid = typeof(IVvAudioClient).GUID;
+    object client;
+    hr = device.Activate(ref iid, 23, IntPtr.Zero, out client);
+    if (hr != 0) throw new Exception("Activate 0x" + hr.ToString("X8"));
+    return (IVvAudioClient)client;
+  }
+
   public static void List() {
     var seen = new HashSet<string>();
     var parts = new List<string>();
@@ -222,8 +287,9 @@ public static class VvCapture {
     IVvAudioClient client = null;
     Process target = null;
     try {
-      bool evented = mode != "sys"; // Process Loopback braucht Ereignisse, der System-Loopback wird abgefragt
+      bool evented = mode != "sys"; // Process Loopback und Eingänge mit Ereignissen, der System-Loopback wird abgefragt
       if (mode == "sys") client = SystemClient();
+      else if (mode == "mic") client = InputClient(name);
       else {
         int pid = FindPid(name.ToLowerInvariant());
         if (pid <= 0) { Console.Error.WriteLine("Programm läuft nicht: " + name); return 3; }
@@ -233,9 +299,10 @@ public static class VvCapture {
       // 16 Bit Stereo, 48 kHz – Windows rechnet selbst um
       format = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(VvWaveFormat)));
       Marshal.StructureToPtr(new VvWaveFormat { tag = 1, channels = 2, rate = Rate, bytesPerSecond = Rate * 4, blockAlign = 4, bits = 16, extra = 0 }, format, false);
-      uint flags = 0x00020000u | 0x80000000u | 0x08000000u; // Loopback, Umrechnen, gute Qualität
+      uint flags = 0x80000000u | 0x08000000u; // Umrechnen (Rate, Kanäle), gute Qualität
+      if (mode != "mic") flags |= 0x00020000u; // Loopback
       if (evented) flags |= 0x00040000u;
-      int hr = client.Initialize(0, flags, 200000, 0, format, IntPtr.Zero); // 20 ms Puffer
+      int hr = client.Initialize(0, flags, mode == "mic" ? 100000 : 200000, 0, format, IntPtr.Zero); // 10 ms (Eingang) bzw. 20 ms Puffer
       if (hr != 0) throw new Exception("Initialize 0x" + hr.ToString("X8"));
       AutoResetEvent ready = null;
       if (evented) {
@@ -286,4 +353,5 @@ public static class VvCapture {
 "@
 
 if ($Mode -eq 'list') { [VvCapture]::List(); exit 0 }
+if ($Mode -eq 'inputs') { [VvCapture]::Inputs(); exit 0 }
 exit [VvCapture]::Run($Mode, $Name)

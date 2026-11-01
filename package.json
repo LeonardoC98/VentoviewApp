@@ -1,7 +1,7 @@
 {
   "name": "ventoview",
   "productName": "Ventoview",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "description": "Ventoview – Overlays für deinen Stream",
   "author": "Ventoview",
   "private": true,
