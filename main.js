@@ -16,6 +16,7 @@ const { Backup } = require('./core/backup');
 const { KeywordSources, normalizeKeywords } = require('./core/keywords');
 const { ModuleManager } = require('./core/modules');
 const { References } = require('./core/references');
+const { LiveAudio } = require('./core/live-audio');
 const { tr } = require('./core/i18n-main');
 // Text in der eingestellten Sprache (Tray, Hinweise, Datei-Fenster)
 const t = (text, ...args) => tr((config?.get('language') || {}).code || 'en', text, ...args);
@@ -37,6 +38,7 @@ let sharing;
 let updater;
 let keywordSources;
 let references;
+let liveAudio;
 let account;
 let twitch;
 let win = null;
@@ -73,9 +75,13 @@ async function init() {
     }
   });
 
+  liveAudio = new LiveAudio();
   bridge = new Bridge({
     version: app.getVersion(),
-    allowedOrigins: () => [originOf(config.get('siteUrl'))],
+    liveAudio,
+    // Dazu die lokale Webseite (localhost:8080): Overlays in der Streaming-Software direkt vom eigenen PC laden –
+    // ohne Tunnel und ohne dessen Warnseite
+    allowedOrigins: () => [...new Set([originOf(config.get('siteUrl')), 'http://localhost:8080', 'http://127.0.0.1:8080'])],
     // 'core' ist die Grund-App selbst: sie liefert die eigenen Keywords
     moduleState: (id) => (id === 'core' ? { installed: true, status: { state: 'ok', text: 'Ventoview' } } : modules.state(id)),
     assetPath: (file) => designs.assetPath(file),
@@ -83,6 +89,8 @@ async function init() {
     uploadAsset: (upload) => designs.addAsset(upload),
   });
   bridge.handle('designs.list', () => designs.list());
+  // Live-Audio: Eingänge, Systemsound und Programme zum Auswählen im Editor
+  bridge.handle('liveaudio.sources', () => liveAudio.list());
   bridge.handle('design.get', (msg) => designs.get(msg));
   bridge.handle('design.save', async (msg) => {
     const saved = await designs.save(msg);
@@ -684,5 +692,6 @@ app.on('before-quit', async (event) => {
   await modules?.stopAll();
   await extensions?.stopAll();
   await bridge?.close();
+  liveAudio?.close();
   app.quit();
 });

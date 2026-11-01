@@ -33,21 +33,25 @@ const MEDIA_TYPES = {
  *   { type: 'subscribe', module }   Daten eines Moduls abonnieren ('core' = Keywords der Grund-App)
  *   { type: 'watch', design }       Änderungen an einem Design abonnieren
  *   { type: <name>, reqId, ... }    Anfrage an einen mit handle() registrierten Handler
+ *
+ * WebSocket /audio?src=<quelle>    Live-Audio (Mikrofon, App, Systemsound) als rohe Pakete: 48 kHz, Stereo, 16 Bit
  */
 class Bridge {
-  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset }) {
+  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset, liveAudio }) {
     this.version = version;
     this.allowedOrigins = allowedOrigins; // () => string[]
     this.moduleState = moduleState;       // (id) => { installed, status }
     this.assetPath = assetPath;           // (file) => absoluter Pfad oder null
     this.moduleFile = moduleFile;         // (moduleId, name) => absoluter Pfad oder null
     this.uploadAsset = uploadAsset;       // ({ name, mime, length, stream }) => Promise<asset>
+    this.liveAudio = liveAudio;           // { attach(ws, quelle) }
     this.handlers = new Map();
     this.latest = new Map();              // Modul-ID → zuletzt gesendete Daten
     this.server = null;
     this.port = null;
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
     this.wss.on('connection', (ws) => this.onConnection(ws));
+    this.audioWss = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   }
 
   handle(type, fn) {
@@ -72,6 +76,7 @@ class Bridge {
   async close() {
     clearInterval(this.pingTimer);
     for (const ws of this.wss.clients) ws.terminate();
+    for (const ws of this.audioWss.clients) ws.terminate();
     if (this.server) {
       this.server.closeAllConnections?.();
       await new Promise((resolve) => this.server.close(resolve));
@@ -197,7 +202,11 @@ class Bridge {
   }
 
   onUpgrade(req, socket, head) {
-    const { pathname } = new URL(req.url, 'http://127.0.0.1');
+    const { pathname, searchParams } = new URL(req.url, 'http://127.0.0.1');
+    if (pathname === '/audio' && this.liveAudio && this.isLocalHost(req) && this.isAllowedOrigin(req)) {
+      this.audioWss.handleUpgrade(req, socket, head, (ws) => this.liveAudio.attach(ws, searchParams.get('src') || ''));
+      return;
+    }
     if (pathname !== '/ws' || !this.isLocalHost(req) || !this.isAllowedOrigin(req)) {
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       return;
