@@ -303,6 +303,8 @@ class ModuleManager extends EventEmitter {
       if (!info) throw new Error(this.registryError || 'Modul nicht gefunden.');
       if (!this.supports(info)) throw new Error(`„${info.name}“ braucht Ventoview ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
       if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem Ventoview-Konto (Einstellungen → Ventoview-Konto).');
+      // Gerade gekauft oder Abo abgeschlossen? Der Lizenzschein wird sonst nur alle 6 Stunden erneuert
+      if (!this.account.allows(id)) await this.account.refresh();
       if (!this.account.allows(id)) throw new Error(`„${info.name}“ ist für dein Konto nicht freigeschaltet.`);
 
       const res = await fetch(new URL(info.package, this.siteUrl()), { cache: 'no-store', headers: this.account.authHeader() });
