@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 
-const REFRESH_MS = 6 * 3600 * 1000;
+const REFRESH_MS = 3600 * 1000; // stündlich – Kündigungen und Widerrufe sollen nicht lange nachwirken
 
 /**
  * Verbindung zum Ventoview-Konto. Die Webseite stellt einen signierten Lizenzschein aus (welche Module frei sind,

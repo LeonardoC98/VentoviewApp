@@ -75,7 +75,7 @@ Danach im Repo **VentoviewWeb** in `app.json` die neue Version eintragen. Die We
 
 ## Konto und Twitch
 
-- **Konto:** Ohne verbundenes Ventoview-Konto laufen keine Module. Der Lizenzschein ist signiert, wird alle 6 Stunden erneuert und gilt offline bis zu 7 Tage.
+- **Konto:** Ohne verbundenes Ventoview-Konto laufen keine Module. Der Lizenzschein ist signiert, wird stündlich erneuert (und beim Öffnen einer Ventoview-Seite) und gilt offline bis zu 7 Tage.
 - **Twitch:** „Mit Twitch verbinden“ zeigt einen Code für twitch.tv/activate (öffentliche Twitch-App, ohne Secret). Die Tokens bleiben verschlüsselt auf dem PC. Module nutzen sie über `ctx.twitch` (`user`, `scopes`, `token()`). Seit 1.6.0 fragt die App zusätzlich Chat schreiben und Whispers an (Chat-Bot). Ältere Verbindungen einmal trennen und neu verbinden.
 - **Werte anderer Module:** `ctx.values()` liefert die aktuellen Werte aller Module und eigenen Keywords (seit 1.6.0), z. B. für `!rank` mit `{divsoloduo}` im Chat-Bot.
 - **Umstieg von StreamHub:** Beim ersten Start übernimmt Ventoview Einstellungen, Konto, Designs, Medien und Module aus dem alten StreamHub-Ordner.
