@@ -46,6 +46,11 @@ let tray = null;
 let quitting = false;
 let bridgeError = null;
 
+// Live-Audio nimmt in einem versteckten Fenster auf. Chromium würde dessen Prozess sonst als „Hintergrund“ drosseln
+// (niedrige Priorität) – dann kommen Mikrofon-Pakete zu langsam an und der Ton wird mit der Zeit körnig.
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
