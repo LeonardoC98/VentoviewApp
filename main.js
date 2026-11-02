@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, safeStorage, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, globalShortcut, ipcMain, nativeImage, safeStorage, screen, shell } = require('electron');
 const { Exporter } = require('./core/exporter');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,6 +17,7 @@ const { KeywordSources, normalizeKeywords } = require('./core/keywords');
 const { ModuleManager } = require('./core/modules');
 const { References } = require('./core/references');
 const { LiveAudio } = require('./core/live-audio');
+const { Screens } = require('./core/screens');
 const { tr } = require('./core/i18n-main');
 // Text in der eingestellten Sprache (Tray, Hinweise, Datei-Fenster)
 const locale = () => (config?.get('language') || {}).code || 'en';
@@ -41,6 +42,7 @@ let keywordSources;
 let references;
 let liveAudio;
 let account;
+let screens;
 let twitch;
 let win = null;
 let tray = null;
@@ -88,13 +90,31 @@ async function init() {
     audioLimit: () => config.get('audioLimit'),
     // Dazu die lokale Webseite (localhost:8080): Overlays in der Streaming-Software direkt vom eigenen PC laden –
     // ohne Tunnel und ohne dessen Warnseite
-    allowedOrigins: () => [...new Set([originOf(config.get('siteUrl')), 'http://localhost:8080', 'http://127.0.0.1:8080'])],
+    allowedOrigins,
     // 'core' ist die Grund-App selbst: sie liefert die eigenen Keywords
     moduleState: (id) => (id === 'core' ? { installed: true, status: { state: 'ok', text: 'Ventoview' } } : modules.state(id)),
     assetPath: (file) => designs.assetPath(file),
     moduleFile: (id, name) => modules?.publicFile(id, name),
     uploadAsset: (upload) => designs.addAsset(upload),
   });
+  // Bildschirme (Modul „Bildschirme“): Designs als Hintergrund oder über allem auf dem Desktop zeigen
+  screens = new Screens({
+    BrowserWindow, screen, app, config,
+    // Das Overlay von derselben Webseite wie der Editor, der „Anzeigen“ geklickt hat (z. B. die lokale Test-Seite)
+    overlayUrl: (id, site) => {
+      const base = site && allowedOrigins().includes(site) ? site : config.get('siteUrl');
+      const url = new URL(`overlay/?d=${encodeURIComponent(id)}&fit=1`, base);
+      if (livePort() !== 47800) url.searchParams.set('port', livePort());
+      return url.href;
+    },
+  });
+  screens.on('change', (list) => {
+    bridge.screensChanged(list);
+    tray?.setContextMenu(trayMenu());
+  });
+  bridge.handle('screens.list', () => screens.list());
+  bridge.handle('screens.show', (msg) => screens.show(msg));
+  bridge.handle('screens.hide', (msg) => screens.hide(msg));
   bridge.handle('designs.list', () => designs.list());
   // Live-Audio: Eingänge, Systemsound und Programme zum Auswählen im Editor
   bridge.handle('liveaudio.sources', () => liveAudio.list());
@@ -107,6 +127,7 @@ async function init() {
   bridge.handle('design.delete', async (msg) => {
     await designs.remove(msg);
     bridge.designChanged(msg.id, null);
+    screens.forget(String(msg.id || ''));
   });
   bridge.handle('assets.list', () => designs.listAssets());
   bridge.handle('asset.delete', (msg) => designs.removeAsset(msg));
@@ -225,6 +246,9 @@ async function init() {
   await extensions.loadInstalled();
   await modules.loadInstalled();
   account.start();
+  // Gemerkte Bildschirm-Anzeigen wieder zeigen (die Overlays brauchen dafür den lokalen Dienst)
+  screens.watch();
+  screens.restore();
   // Selbstheilung: gesperrte Module, die das Konto inzwischen freischaltet, alle 30 s entsperren (und umgekehrt)
   setInterval(() => modules.syncLicense(), 30_000);
   modules.fetchRegistry().then(() => modules.autoInstall());
@@ -300,6 +324,8 @@ function trayMenu() {
     { label: t('Ventoview öffnen'), click: showWindow },
     { label: t('Webseite öffnen'), click: () => shell.openExternal(config.get('siteUrl')) },
     ...(['available', 'ready'].includes(status) ? [{ label: t('Update {0} installieren', version), click: () => updater.install() }] : []),
+    // Notbremse, falls ein Design auf einem Bildschirm stört
+    ...(Object.keys(config.get('screens') || {}).length ? [{ label: t('Bildschirm-Anzeigen ausschalten'), click: () => screens.hideAll() }] : []),
     { type: 'separator' },
     { label: t('Beenden'), click: () => app.quit() },
   ]);
@@ -346,6 +372,12 @@ function showWindow() {
     }
   });
   win.on('closed', () => { win = null; });
+}
+
+// Webseiten, die mit der App sprechen dürfen: die eingestellte und die lokale Test-Seite (localhost:8080) – darüber
+// laden Overlays in der Streaming-Software auch direkt vom eigenen PC, ohne Tunnel und ohne dessen Warnseite
+function allowedOrigins() {
+  return [...new Set([originOf(config.get('siteUrl')), 'http://localhost:8080', 'http://127.0.0.1:8080'])];
 }
 
 function originOf(url) {
@@ -735,6 +767,7 @@ app.on('before-quit', async (event) => {
   quitting = true;
   event.preventDefault();
   keywordSources?.stop();
+  screens?.stop();
   await modules?.stopAll();
   await extensions?.stopAll();
   await bridge?.close();

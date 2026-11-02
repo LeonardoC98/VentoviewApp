@@ -299,6 +299,11 @@ class Bridge {
     this.broadcast(() => true, { type: 'settings', audioLimit: this.audioLimit?.() });
   }
 
+  // Bildschirme (an/ab, was wo gezeigt wird): an alle offenen Editoren
+  screensChanged(screens) {
+    this.broadcast(() => true, { type: 'screens', screens });
+  }
+
   // Gespeichertes Design sofort an alle offenen Overlays schicken (kein Neuladen in OBS nötig)
   designChanged(id, design) {
     this.broadcast((ws) => ws.designs.has(id), { type: 'design', id, design });

@@ -453,6 +453,7 @@ VVI18n.add({
   "Bald erhältlich": ["Coming soon", "Presto disponibile", "Próximamente", "Bientôt disponible"],
   "Bald erhältlich – noch nicht nutzbar": ["Coming soon – can’t be used yet", "Presto disponibile – non ancora utilizzabile", "Próximamente – aún no se puede usar", "Bientôt disponible – pas encore utilisable"],
   "„{0}“ ist bald erhältlich.": ["“{0}” is coming soon.", "“{0}” sarà presto disponibile.", "“{0}” llegará pronto.", "« {0} » arrive bientôt."],
+  "Bildschirm-Anzeigen ausschalten": ["Turn off screen displays", "Disattiva le visualizzazioni sugli schermi", "Desactivar las vistas en pantallas", "Désactiver les affichages sur les écrans"],
   "Trotzdem ändern": ["Change anyway", "Modifica comunque", "Cambiar de todos modos", "Changer quand même"],
   // Rückfragen (dialog.js): Knöpfe und Texte, die vorher in Windows-Meldungen standen
   "Verwerfen": ["Discard", "Scarta", "Descartar", "Abandonner"],
