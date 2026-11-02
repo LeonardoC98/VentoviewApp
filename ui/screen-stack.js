@@ -14,7 +14,7 @@ if (params.get('preview') === '1') {
   close.type = 'button';
   close.className = 'close';
   close.title = 'Vorschau schließen (Esc)';
-  close.textContent = '×';
+  close.setAttribute('aria-label', 'Vorschau schließen');
   close.addEventListener('click', () => window.close());
   document.body.append(close);
   addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });

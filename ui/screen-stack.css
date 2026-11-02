@@ -5,6 +5,11 @@ body.preview { background: repeating-conic-gradient(#2a2a33 0% 25%, #1c1c23 0% 5
 .close {
   position: fixed; top: 18px; right: 18px; z-index: 10; width: 44px; height: 44px; border: 0; border-radius: 50%;
   background: rgba(10, 10, 14, .78); box-shadow: 0 6px 20px rgba(0, 0, 0, .45), inset 0 0 0 1px rgba(255, 255, 255, .14);
-  color: #fff; font: 600 26px/44px 'Segoe UI', system-ui, sans-serif; cursor: pointer;
+  cursor: pointer;
 }
+.close::before, .close::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 18px; height: 2px; border-radius: 1px; background: #fff;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.close::after { transform: translate(-50%, -50%) rotate(-45deg); }
 .close:hover { background: #dc2626; }
