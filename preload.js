@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('streamhub', {
   getState: () => ipcRenderer.invoke('state:get'),
   onState: (callback) => ipcRenderer.on('state', (_event, state) => callback(state)),
+  // Rückfragen des Hauptprogramms im Fenster beantworten (ui/dialog.js)
+  onAsk: (callback) => ipcRenderer.on('ui:ask', (_event, id, question) => callback(id, question)),
+  answer: (id, value) => ipcRenderer.send('ui:answer', id, value),
   refresh: () => ipcRenderer.invoke('modules:refresh'),
   install: (id) => ipcRenderer.invoke('modules:install', id),
   uninstall: (id) => ipcRenderer.invoke('modules:uninstall', id),

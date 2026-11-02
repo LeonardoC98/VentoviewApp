@@ -19,7 +19,8 @@ const { References } = require('./core/references');
 const { LiveAudio } = require('./core/live-audio');
 const { tr } = require('./core/i18n-main');
 // Text in der eingestellten Sprache (Tray, Hinweise, Datei-Fenster)
-const t = (text, ...args) => tr((config?.get('language') || {}).code || 'en', text, ...args);
+const locale = () => (config?.get('language') || {}).code || 'en';
+const t = (text, ...args) => tr(locale(), text, ...args);
 const { TwitchAuth } = require('./core/twitch');
 const { Updater } = require('./core/updater');
 
@@ -386,6 +387,22 @@ function pushState() {
 }
 
 // Fehler als Ergebnis zurückgeben statt zu werfen, damit die Oberfläche sie anzeigen kann
+// Rückfrage im Fenster der App (ui/dialog.js) statt einer Windows-Meldung → true/false
+const asks = new Map();
+let askCount = 0;
+ipcMain.on('ui:answer', (_event, id, value) => {
+  asks.get(id)?.(value === true);
+  asks.delete(id);
+});
+function askInApp(question) {
+  if (!win || win.isDestroyed()) return Promise.resolve(false);
+  const id = ++askCount;
+  return new Promise((resolve) => {
+    asks.set(id, resolve);
+    win.webContents.send('ui:ask', id, question);
+  });
+}
+
 function handle(channel, fn) {
   ipcMain.handle(channel, async (_event, ...args) => {
     try {
@@ -529,12 +546,12 @@ handle('bot:import', async () => {
   const clash = data.blocks.find((b) => b?.type === 'generator' && taken.has(String(b.name)));
   if (clash) throw new Error(`Die Datei enthält den Generator {${clash.name}} – den Namen benutzt schon ein Modul. Bitte in der Datei umbenennen.`);
   const generators = data.blocks.filter((b) => b?.type === 'generator').length;
-  const { response } = await dialog.showMessageBox(win, {
-    type: 'warning', title: t('Ventoview-Bot importieren'), message: t('Alle Bot-Elemente werden ersetzt.'),
-    detail: `Die Datei vom ${new Date(data.createdAt).toLocaleString('de-DE')} enthält ${data.blocks.length - generators} Elemente und ${generators} Zufallsgeneratoren. Deine jetzigen Befehle, Generatoren, Timer usw. werden durch diese ersetzt; dein Kanal bleibt.`,
-    buttons: [t('Ersetzen'), t('Abbrechen')], defaultId: 1, cancelId: 1, noLink: true,
+  const replace = await askInApp({
+    title: 'Alle Bot-Elemente werden ersetzt.',
+    text: `Die Datei vom ${new Date(data.createdAt).toLocaleString(locale())} enthält ${data.blocks.length - generators} Elemente und ${generators} Zufallsgeneratoren. Deine jetzigen Befehle, Generatoren, Timer usw. werden durch diese ersetzt; dein Kanal bleibt.`,
+    ok: 'Ersetzen', danger: true,
   });
-  if (response !== 0) return null;
+  if (!replace) return null;
   const { values } = modules.settingsOf('chatbot');
   const next = { ...values };
   for (const key of BOT_SHARED.filter((k) => k !== 'blocks')) if (data.settings && key in data.settings) next[key] = data.settings[key];
@@ -565,25 +582,20 @@ handle('backup:load', async () => {
   });
   if (canceled || !filePaths[0]) return null;
   const data = await backup.read(filePaths[0]);
-  const created = new Date(data.manifest.createdAt).toLocaleString('de-DE');
+  const created = new Date(data.manifest.createdAt).toLocaleString(locale());
   const designs = data.files.filter((f) => f.path.startsWith('designs/')).length;
   const media = data.files.filter((f) => f.path.startsWith('assets/') && !f.path.endsWith('index.json')).length;
-  const { response } = await dialog.showMessageBox(win, {
-    type: 'warning',
-    title: t('Sicherung laden'),
-    message: t('Alle jetzigen Daten werden überschrieben.'),
-    detail: [
+  const overwrite = await askInApp({
+    title: 'Alle jetzigen Daten werden überschrieben.',
+    text: [
       `Sicherung vom ${created} (Ventoview ${data.manifest.app || '?'}): ${designs} Designs, ${media} eigene Medien, Modul-Einstellungen, Keywords, Home und App-Einstellungen.`,
       'Deine jetzigen Designs, Medien und Einstellungen werden ersetzt. Konto- und Twitch-Verbindung dieses PCs bleiben.',
       'Vorher legt Ventoview automatisch eine Sicherung des jetzigen Stands in Dokumente\\Ventoview\\Sicherungen an. Danach startet die App neu.',
       data.commands.length ? `⚠ Die Sicherung enthält ${data.commands.length} PowerShell-Befehl(e) als Keywords (${data.commands.join(', ')}). Die laufen danach auf diesem PC – nur laden, wenn die Datei von dir stammt!` : '',
     ].filter(Boolean).join('\n\n'),
-    buttons: ['Überschreiben und neu starten', t('Abbrechen')],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
+    ok: 'Überschreiben und neu starten', danger: true,
   });
-  if (response !== 0) return null;
+  if (!overwrite) return null;
   await backup.autoBackup();
   // Alles anhalten, dann ersetzen und neu starten
   quitting = true;

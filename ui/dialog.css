@@ -1,0 +1,31 @@
+/* Rückfragen und Meldungen im Stil von Ventoview (assets/dialog.js) – unabhängig vom CSS der Seite, auch in der App */
+.vv-dialog {
+  box-sizing: border-box; width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
+  margin: auto; padding: 22px 22px 18px; border: 0; border-radius: 22px;
+  background: #131318; color: #ececf1;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .65), inset 0 0 0 1px rgba(255, 255, 255, .07);
+  font: 15px/1.55 Inter, 'Segoe UI', system-ui, sans-serif; text-align: left;
+}
+.vv-dialog::backdrop { background: rgba(0, 0, 0, .6); }
+.vv-dialog h2 { margin: 0; color: #ececf1; font-size: 18px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.vv-dialog p { margin: 8px 0 0; color: #a1a1b0; font-size: 14.5px; white-space: pre-line; overflow-wrap: anywhere; }
+.vv-dialog .vv-dialog-input {
+  box-sizing: border-box; width: 100%; height: 40px; margin-top: 14px; padding: 0 12px;
+  border: 1px solid #2a2a35; border-radius: 10px; background: #0e0e12; color: inherit; font: inherit; outline: none;
+}
+.vv-dialog .vv-dialog-input:focus { border-color: #8b5cf6; }
+.vv-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.vv-dialog-actions button {
+  height: 38px; padding: 0 18px; border: 0; border-radius: 999px;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); color: #ececf1;
+  font: 600 14px Inter, 'Segoe UI', system-ui, sans-serif; cursor: pointer;
+}
+.vv-dialog-actions button:hover { background: rgba(255, 255, 255, .1); }
+.vv-dialog-actions button:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+.vv-dialog-actions button.primary {
+  background: linear-gradient(180deg, #9a6cff, #7c4def); color: #fff;
+  box-shadow: 0 10px 28px -10px rgba(139, 92, 246, .75), inset 0 1px 0 rgba(255, 255, 255, .2);
+}
+.vv-dialog-actions button.primary:hover { background: linear-gradient(180deg, #a57cff, #8556f5); }
+.vv-dialog-actions button.danger { background: #dc2626; box-shadow: none; color: #fff; }
+.vv-dialog-actions button.danger:hover { background: #b91c1c; }

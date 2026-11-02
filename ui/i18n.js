@@ -27,17 +27,19 @@
   function add(dict) {
     for (const [src, list] of Object.entries(dict)) {
       if (src.startsWith('re:')) {
-        patterns.push([new RegExp(`^${src.slice(3)}$`), list, null]);
+        patterns.push([new RegExp(`^${src.slice(3)}$`), list, null, Infinity]);
       } else if (/\{\d\}/.test(src)) {
         // „Verbunden als {0}“ → /^Verbunden als (.+?)$/ – Platzhalter in der Übersetzung wieder einsetzen
         const order = [...norm(src).matchAll(/\{(\d)\}/g)].map((m) => Number(m[1]));
-        const re = norm(src).split(/\{\d\}/).map(esc).join('([\\s\\S]+?)');
-        patterns.push([new RegExp(`^${re}$`), list, order]);
+        const parts = norm(src).split(/\{\d\}/);
+        patterns.push([new RegExp(`^${parts.map(esc).join('([\\s\\S]+?)')}$`), list, order, parts.join('').length]);
         exact.set(norm(src), list);
       } else {
         exact.set(norm(src), list);
       }
     }
+    // Das genaueste Muster zuerst: „Wenn du {0} löschst, … Trotzdem löschen?“ vor „{0} löschen?“ (Sonderfälle mit re: ganz vorn)
+    patterns.sort((a, b) => (b[3] === a[3] ? 0 : b[3] > a[3] ? 1 : -1));
     if (lang !== 'de') refresh();
   }
 

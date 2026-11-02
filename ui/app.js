@@ -270,7 +270,7 @@ function renderExtensions() {
           update ? h('small', { class: 'ext-update' }, `Update ${update} verfügbar – herunterladen und mit „Datei hinzufügen …“ einsetzen`) : null),
         h('span', { class: 'btn-row' },
           update ? h('button', { type: 'button', class: 'btn primary', onclick: () => run('downloadExtension', ext.id) }, `Update ${update} laden`) : null,
-          h('button', { type: 'button', class: 'btn ghost', onclick: () => { if (confirm(`„${ext.name}“ entfernen? Module, die sie brauchen, laufen dann nicht.`)) run('removeExtension', ext.id); } }, 'Entfernen')),
+          h('button', { type: 'button', class: 'btn ghost', onclick: async () => { if (await VVDialog.confirm(`„${ext.name}“ entfernen? Module, die sie brauchen, laufen dann nicht.`, { ok: 'Entfernen', danger: true })) run('removeExtension', ext.id); } }, 'Entfernen')),
       );
     })
     : [h('div', { class: 'row last' }, h('small', {}, 'Keine Erweiterungen. Braucht ein Modul eine, sagt dir die App Bescheid.'))]));
@@ -348,7 +348,7 @@ function renderAccount() {
       ),
       h('div', { class: 'connection-actions' },
         h('button', { class: 'btn', type: 'button', onclick: () => run('openAccount') }, 'Konto'),
-        h('button', { class: 'btn ghost', type: 'button', onclick: () => { if (confirm('App vom Konto trennen? Module laufen dann nicht mehr.')) run('disconnectAccount'); } }, 'Trennen'),
+        h('button', { class: 'btn ghost', type: 'button', onclick: async () => { if (await VVDialog.confirm('App vom Konto trennen? Module laufen dann nicht mehr.', { ok: 'Trennen', danger: true })) run('disconnectAccount'); } }, 'Trennen'),
       ),
     );
     return;
@@ -579,7 +579,9 @@ function openModuleSettings(id) {
   });
   // Schließen (×, Schließen, Esc) mit Ungespeichertem: nachfragen, sonst zurück auf den gespeicherten Stand
   $('moduleDialog').oncancel = (event) => {
-    if (dirty && !confirm('Änderungen nicht gespeichert – verwerfen?')) event.preventDefault();
+    if (!dirty) return;
+    event.preventDefault();
+    closeSettings();
   };
   $('moduleDialog').onclose = () => {
     $('moduleDialog').onclose = null;
@@ -589,8 +591,8 @@ function openModuleSettings(id) {
     if (dirty) api.previewModuleSettings?.(id, saved);
     dirty = false;
   };
-  function closeSettings() {
-    if (dirty && !confirm('Änderungen nicht gespeichert – verwerfen?')) return;
+  async function closeSettings() {
+    if (dirty && !(await VVDialog.confirm('Änderungen nicht gespeichert – verwerfen?', { ok: 'Verwerfen', danger: true }))) return;
     $('moduleDialog').close();
   }
   $('moduleDialog').replaceChildren(
@@ -729,7 +731,7 @@ async function confirmUnused(label, names, dial = null) {
   if (!api.shortcutUsage) return true;
   const res = await api.shortcutUsage(names, dial);
   const used = res.ok ? res.result || [] : [];
-  return !used.length || confirm(`{${label}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`);
+  return !used.length || VVDialog.confirm(`{${label}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`, { ok: 'Löschen', danger: true });
 }
 
 // Name zum Anklicken und Umbenennen. check(name) → Fehlertext oder null; done(neu) übernimmt
@@ -881,7 +883,7 @@ function randomizerEditor(field, initial) {
           h('span', {}, isOpen ? '▾' : '▸'),
           h('b', {}, `🎲 ${r.command || r.name}`),
           h('small', { class: 'muted' }, `${r.entries.length} Einträge · {zufall_${r.name}}`),
-          h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: (ev) => { ev.stopPropagation(); if (confirm(`„${r.command || r.name}“ löschen?`)) { list.splice(index, 1); open.delete(index); draw(); } } }, '×')),
+          h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: async (ev) => { ev.stopPropagation(); if (await VVDialog.confirm(`„${r.command || r.name}“ löschen?`, { ok: 'Löschen', danger: true })) { list.splice(index, 1); open.delete(index); draw(); } } }, '×')),
         isOpen ? h('div', { class: 'rnd-body' },
           h('div', { class: 'rnd-grid' },
             h('label', {}, 'Befehl', input('command', { placeholder: '!lucky' })),
@@ -1170,7 +1172,7 @@ function keywordRow(entry = { source: 'text' }) {
       onclick: async () => {
         const saved = row.dataset.saved;
         const used = saved ? (await api.keywordUsage(saved)).result || [] : [];
-        if (used.length && !confirm(`{${saved}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`)) return;
+        if (used.length && !(await VVDialog.confirm(`{${saved}} wird benutzt:\n${usageText(used)}\n\nWenn du es löschst, funktionieren diese Stellen nicht mehr. Trotzdem löschen?`, { ok: 'Löschen', danger: true }))) return;
         row.remove();
       },
     }, '×'),
@@ -1202,8 +1204,8 @@ function keywordRow(entry = { source: 'text' }) {
       });
       const full = h('input', { type: 'checkbox', name: 'full' });
       full.checked = Boolean(entry.full);
-      full.addEventListener('change', () => {
-        if (full.checked && !confirm('Voller Zugriff für dieses Python-Keyword?\n\nDer Code darf dann alles, was du auf diesem PC darfst: Dateien lesen, ändern und löschen, Programme starten, ins Internet senden.\n\nNur einschalten, wenn du den Code selbst geschrieben hast und genau verstehst. Niemals für Code aus dem Chat, Discord oder von Fremden.')) full.checked = false;
+      full.addEventListener('change', async () => {
+        if (full.checked && !(await VVDialog.confirm('Voller Zugriff für dieses Python-Keyword?\n\nDer Code darf dann alles, was du auf diesem PC darfst: Dateien lesen, ändern und löschen, Programme starten, ins Internet senden.\n\nNur einschalten, wenn du den Code selbst geschrieben hast und genau verstehst. Niemals für Code aus dem Chat, Discord oder von Fremden.', { ok: 'Einschalten', danger: true }))) full.checked = false;
         row.classList.toggle('kw-full', full.checked);
       });
       row.classList.toggle('kw-full', full.checked);
@@ -1330,7 +1332,7 @@ $('keywordsForm').addEventListener('submit', async (event) => {
     const used = (await api.keywordUsage(r.from)).result || [];
     if (used.length) notes.push(`{${r.from}} → {${r.to}}:\n${usageText(used)}`);
   }
-  if (notes.length && !confirm(`Umbenannte Keywords werden benutzt – die Umbenennung wird dort übernommen:\n\n${notes.join('\n\n')}\n\nWeiter?`)) return;
+  if (notes.length && !(await VVDialog.confirm(`Umbenannte Keywords werden benutzt – die Umbenennung wird dort übernommen:\n\n${notes.join('\n\n')}\n\nWeiter?`, { ok: 'Speichern' }))) return;
   const list = rows.map(readKeywordRow);
   const res = await api.saveKeywords(list, renames);
   if (res.ok) fillKeywords();
@@ -1423,16 +1425,16 @@ $('exportBtn').addEventListener('click', async () => {
 });
 
 // Audio-Schutz abschalten oder lockern: erst nach Warnung. Strenger stellen geht ohne Rückfrage.
-const LIMIT_WARNING = 'Der Audio-Schutz begrenzt die Lautstärke aller Töne in deinen Overlays und im Editor. Er dient dem Schutz deines Gehörs und deiner Geräte (Kopfhörer, Lautsprecher) vor plötzlichen, sehr lauten Spitzen – z. B. durch eine laute Datei oder durch Effekte wie Gain und EQ.\n\nWenn du ihn abschaltest oder die Grenze erhöhst, geschieht das auf eigene Gefahr: Zu hohe Pegel können Gehör und Geräte dauerhaft schädigen. Ändere das nur, wenn du weißt, was du tust.\n\nTrotzdem ändern?';
+const LIMIT_WARNING = { title: 'Audio-Schutz lockern?', text: 'Der Audio-Schutz begrenzt die Lautstärke aller Töne in deinen Overlays und im Editor. Er dient dem Schutz deines Gehörs und deiner Geräte (Kopfhörer, Lautsprecher) vor plötzlichen, sehr lauten Spitzen – z. B. durch eine laute Datei oder durch Effekte wie Gain und EQ.\n\nWenn du ihn abschaltest oder die Grenze erhöhst, geschieht das auf eigene Gefahr: Zu hohe Pegel können Gehör und Geräte dauerhaft schädigen. Ändere das nur, wenn du weißt, was du tust.' };
 let limitConfirmed = false;
-function guardLimit(event) {
+async function guardLimit(event) {
   const form = $('settingsForm');
   const before = state.settings.audioLimit || { on: true, ceiling: -6 };
   const on = form.limitOn.checked;
   const ceiling = Number(form.limitCeiling.value);
   const riskier = !on || ceiling > (before.on === false ? 0 : Number(before.ceiling ?? -6));
   if (riskier && !limitConfirmed) {
-    if (!confirm(LIMIT_WARNING)) {
+    if (!(await VVDialog.confirm(LIMIT_WARNING, { ok: 'Trotzdem ändern', danger: true }))) {
       form.limitOn.checked = before.on !== false;
       form.limitCeiling.value = before.ceiling ?? -6;
       form.limitCeiling.disabled = before.on === false;
@@ -1472,6 +1474,9 @@ function applyLanguage() {
   if ($('langSelect').value !== code) $('langSelect').value = code;
 }
 $('langSelect').addEventListener('change', (e) => run('setLanguage', e.target.value));
+
+// Rückfragen der App selbst (Bot importieren, Sicherung laden) – im selben Fenster wie alle anderen
+api.onAsk?.((id, { title, text, ok, danger }) => VVDialog.confirm({ title, text }, { ok, danger }).then((yes) => api.answer(id, yes)));
 
 api.onState((next) => {
   const before = Object.keys(state?.keywordConflicts || {}).join();
