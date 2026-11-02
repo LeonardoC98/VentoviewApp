@@ -197,7 +197,7 @@ async function init() {
   // Export (Modul Videoschnitt): Design als MP4/WAV in den Export-Ordner rendern
   const exporter = new Exporter({
     BrowserWindow, ipcMain, dialog, shell, config, modules,
-    siteUrl: () => config.get('siteUrl'), port: () => config.get('port'), videosDir: app.getPath('videos'),
+    siteUrl: () => config.get('siteUrl'), port: () => livePort(), videosDir: app.getPath('videos'),
   });
   bridge.handle('export.info', (msg) => exporter.info(msg));
   bridge.handle('export.pickDir', () => exporter.pickDir());
@@ -256,18 +256,30 @@ function migrateFromStreamHub(userData) {
   }
 }
 
+// Ist der eingestellte Port belegt, nimmt die App den nächsten freien bis 47809 – Webseite und Overlays suchen dort
+// von selbst, auch mit einer Overlay-Adresse ohne ?port=
+const PORT_RANGE = Array.from({ length: 10 }, (_, i) => 47800 + i);
 async function startBridge() {
   await bridge.close();
-  try {
-    await bridge.listen(config.get('port'));
-    bridgeError = null;
-  } catch (err) {
-    bridgeError = err.code === 'EADDRINUSE'
-      ? `Port ${config.get('port')} wird schon von einem anderen Programm benutzt.`
-      : err.message;
+  const wanted = config.get('port');
+  bridgeError = null;
+  for (const port of [...new Set([wanted, ...PORT_RANGE])]) {
+    try {
+      await bridge.listen(port);
+      bridgeError = null;
+      break;
+    } catch (err) {
+      bridgeError = err.code === 'EADDRINUSE'
+        ? `Port ${wanted} und die Ausweich-Ports 47800–47809 sind alle von anderen Programmen belegt.`
+        : err.message;
+      if (err.code !== 'EADDRINUSE') break;
+    }
   }
   pushState();
 }
+
+// Port, auf dem die App gerade wirklich lauscht (kann vom eingestellten abweichen, wenn der belegt war)
+const livePort = () => bridge.port || config.get('port');
 
 function applyAutostart() {
   if (!INSTALLED) return;
@@ -347,7 +359,7 @@ function getState() {
   return {
     version: app.getVersion(),
     installed: INSTALLED,
-    bridge: { port: bridge.port, error: bridgeError },
+    bridge: { port: bridge.port, wanted: config.get('port'), error: bridgeError },
     settings: { port: config.get('port'), siteUrl: config.get('siteUrl'), autostart: config.get('autostart'), audioLimit: config.get('audioLimit') },
     keywords: config.get('keywords'),
     keywordValues: keywordSources?.values ?? {},
@@ -594,14 +606,14 @@ handle('modules:settings', (id, values) => modules.saveSettings(id, values));
 handle('modules:settingsPreview', (id, values) => modules.saveSettings(id, values, { persist: false }));
 handle('modules:open', (id) => {
   const url = new URL(`modules/${encodeURIComponent(id)}/`, config.get('siteUrl'));
-  if (config.get('port') !== 47800) url.searchParams.set('port', config.get('port'));
+  if (livePort() !== 47800) url.searchParams.set('port', livePort());
   return shell.openExternal(url.href);
 });
 handle('site:open', () => shell.openExternal(config.get('siteUrl')));
 // Logo oben links: Home-Seite (Home, Module, Hub) – mit Port, falls nicht der Standard
 handle('site:home', () => {
   const url = new URL('home/', config.get('siteUrl'));
-  if (config.get('port') !== 47800) url.searchParams.set('port', config.get('port'));
+  if (livePort() !== 47800) url.searchParams.set('port', livePort());
   return shell.openExternal(url.href);
 });
 handle('account:open', () => shell.openExternal(new URL('konto/', config.get('siteUrl')).href));

@@ -215,7 +215,8 @@ function render() {
 
   const dot = $('service').querySelector('.dot');
   dot.className = `dot ${bridge.error ? 'error' : 'ok'}`;
-  $('serviceText').textContent = bridge.error || `Lokaler Dienst aktiv · Port ${bridge.port}`;
+  $('serviceText').textContent = bridge.error
+    || `Lokaler Dienst aktiv · Port ${bridge.port}${bridge.wanted && bridge.port !== bridge.wanted ? ` (${bridge.wanted} ist belegt)` : ''}`;
 
   // Oben, was freigeschaltet ist (und „in Arbeit“ grau) – gesperrte Module (z. B. Abo beendet) stehen unten bei „Module entdecken“.
   // Sortiert: eingeschaltete zuerst, dann ausgeschaltete, dann „in Arbeit“ – jeweils nach Name
