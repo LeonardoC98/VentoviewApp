@@ -332,6 +332,7 @@ class ModuleManager extends EventEmitter {
       if (!this.supports(info)) throw new Error(`„${info.name}“ braucht Ventoview ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
       if (info.status === 'wip') throw new Error(`„${info.name}“ ist gerade in Arbeit.`);
       if (info.status === 'soon') throw new Error(`„${info.name}“ ist bald erhältlich.`);
+      if (info.status === 'undercover' && !this.running.has(id)) throw new Error('Modul nicht gefunden.');
       if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem Ventoview-Konto (Einstellungen → Ventoview-Konto).');
       // Gerade gekauft oder Abo abgeschlossen? Der Lizenzschein wird sonst nur stündlich erneuert
       if (!this.account.allows(id)) await this.account.refresh();
@@ -440,6 +441,8 @@ class ModuleManager extends EventEmitter {
     if (!this.registry || !this.account?.state().connected) return;
     for (const info of this.registry.modules || []) {
       if (this.busy.has(info.id) || info.status === 'wip' || info.status === 'soon' || !this.account.allows(info.id) || !this.supports(info)) continue;
+      // „Hidden“: nur Updates für schon installierte, nie neu dazuholen
+      if (info.status === 'undercover' && !this.running.has(info.id)) continue;
       const current = this.running.get(info.id)?.manifest.version;
       if (current && current === info.version) continue;
       await this.install(info.id).catch((err) => console.error(`Modul "${info.id}" konnte nicht geladen werden:`, err.message));
@@ -522,7 +525,7 @@ class ModuleManager extends EventEmitter {
     return {
       installed,
       available: available
-        .filter((m) => !this.running.has(m.id))
+        .filter((m) => !this.running.has(m.id) && m.status !== 'undercover')
         .map((m) => ({ ...m, busy: this.busy.has(m.id), unsupported: !this.supports(m), locked: !this.account?.allows(m.id), wip: m.status === 'wip' || m.status === 'soon', soon: m.status === 'soon' })),
       registryError: this.registryError,
     };
