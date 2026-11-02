@@ -299,8 +299,13 @@ class ModuleManager extends EventEmitter {
     return Boolean(this.registry?.hiddenModules?.includes(id));
   }
 
+  // Gesperrt: „in Arbeit“ oder „bald erhältlich“ (Admin der Webseite) – beides läuft nicht und lässt sich nicht dazuholen
   isWip(id) {
-    return Boolean(this.registry?.modules?.some((m) => m.id === id && m.status === 'wip'));
+    return Boolean(this.registry?.modules?.some((m) => m.id === id && (m.status === 'wip' || m.status === 'soon')));
+  }
+
+  isSoon(id) {
+    return Boolean(this.registry?.modules?.some((m) => m.id === id && m.status === 'soon'));
   }
 
   shouldLock(id) {
@@ -309,6 +314,7 @@ class ModuleManager extends EventEmitter {
 
   lockedStatus(id) {
     if (this.isHidden(id)) return { state: 'idle', text: 'Nicht mehr verfügbar' };
+    if (this.isSoon(id)) return { state: 'idle', text: 'Bald erhältlich – noch nicht nutzbar' };
     if (this.isWip(id)) return { state: 'idle', text: 'In Arbeit – gerade nicht nutzbar' };
     return this.account?.state().connected
       ? { state: 'warn', text: 'Für dein Konto nicht freigeschaltet' }
@@ -325,6 +331,7 @@ class ModuleManager extends EventEmitter {
       if (!info) throw new Error(this.registryError || 'Modul nicht gefunden.');
       if (!this.supports(info)) throw new Error(`„${info.name}“ braucht Ventoview ${info.minApp} oder neuer – bitte zuerst die App aktualisieren.`);
       if (info.status === 'wip') throw new Error(`„${info.name}“ ist gerade in Arbeit.`);
+      if (info.status === 'soon') throw new Error(`„${info.name}“ ist bald erhältlich.`);
       if (!this.account?.state().connected) throw new Error('Verbinde die App zuerst mit deinem Ventoview-Konto (Einstellungen → Ventoview-Konto).');
       // Gerade gekauft oder Abo abgeschlossen? Der Lizenzschein wird sonst nur stündlich erneuert
       if (!this.account.allows(id)) await this.account.refresh();
@@ -432,7 +439,7 @@ class ModuleManager extends EventEmitter {
   async autoInstall() {
     if (!this.registry || !this.account?.state().connected) return;
     for (const info of this.registry.modules || []) {
-      if (this.busy.has(info.id) || info.status === 'wip' || !this.account.allows(info.id) || !this.supports(info)) continue;
+      if (this.busy.has(info.id) || info.status === 'wip' || info.status === 'soon' || !this.account.allows(info.id) || !this.supports(info)) continue;
       const current = this.running.get(info.id)?.manifest.version;
       if (current && current === info.version) continue;
       await this.install(info.id).catch((err) => console.error(`Modul "${info.id}" konnte nicht geladen werden:`, err.message));
@@ -502,6 +509,7 @@ class ModuleManager extends EventEmitter {
         ...manifest,
         locked,
         wip,
+        soon: this.isSoon(id),
         inactive,
         needsExtension,
         status,
@@ -515,7 +523,7 @@ class ModuleManager extends EventEmitter {
       installed,
       available: available
         .filter((m) => !this.running.has(m.id))
-        .map((m) => ({ ...m, busy: this.busy.has(m.id), unsupported: !this.supports(m), locked: !this.account?.allows(m.id), wip: m.status === 'wip' })),
+        .map((m) => ({ ...m, busy: this.busy.has(m.id), unsupported: !this.supports(m), locked: !this.account?.allows(m.id), wip: m.status === 'wip' || m.status === 'soon', soon: m.status === 'soon' })),
       registryError: this.registryError,
     };
   }

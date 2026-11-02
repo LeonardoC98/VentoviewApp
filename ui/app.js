@@ -127,13 +127,13 @@ function gearIcon() {
 
 function installedCard(mod) {
   const status = mod.status || { state: 'idle', text: '' };
-  // In Arbeit: grau mit WIP, keine Knöpfe – nutzbar wird es erst, wenn es auf der Webseite wieder aktiv ist
+  // In Arbeit / bald erhältlich: grau mit WIP bzw. „Bald“, keine Knöpfe – nutzbar erst, wenn es auf der Webseite aktiv ist
   if (mod.wip) {
     return h('div', { class: 'card wip' },
       tile(mod),
       h('div', { class: 'card-body' },
-        h('div', { class: 'card-title' }, mod.name, h('small', {}, `v${mod.version}`), h('span', { class: 'badge wip' }, 'WIP')),
-        h('div', { class: 'card-status' }, h('span', { class: 'dot idle' }), status.text || 'In Arbeit – gerade nicht nutzbar')),
+        h('div', { class: 'card-title' }, mod.name, h('small', {}, `v${mod.version}`), h('span', { class: 'badge wip' }, mod.soon ? 'Bald' : 'WIP')),
+        h('div', { class: 'card-status' }, h('span', { class: 'dot idle' }), status.text || (mod.soon ? 'Bald erhältlich – noch nicht nutzbar' : 'In Arbeit – gerade nicht nutzbar'))),
       h('div', { class: 'card-actions' }));
   }
   return h('div', { class: 'card' },
@@ -200,7 +200,7 @@ function availableCard(mod) {
     ),
     h('p', { class: 'card-desc' }, mod.description),
     mod.wip
-      ? h('button', { class: 'btn', type: 'button', disabled: true }, 'In Arbeit')
+      ? h('button', { class: 'btn', type: 'button', disabled: true }, mod.soon ? 'Bald erhältlich' : 'In Arbeit')
       : mod.unsupported
       ? h('button', { class: 'btn', type: 'button', disabled: true, title: 'Erst die App aktualisieren (Einstellungen → Updates)' }, `Braucht App ${mod.minApp}`)
       : mod.locked
