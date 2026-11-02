@@ -54,14 +54,15 @@
 
   function lookupOne(key, i) {
     const hit = exact.get(key);
-    if (hit && !/\{\d\}/.test(key)) return hit[i] ?? null;
+    if (hit && !/\{\d\}/.test(key)) return hit[i] ?? hit[0] ?? null; // fehlt die Sprache: Englisch statt Deutsch
     for (const [re, list, order] of patterns) {
       const m = re.exec(key);
-      if (!m || list[i] == null) continue;
+      if (!m || (list[i] ?? list[0]) == null) continue;
+      const text = list[i] ?? list[0];
       // Eingesetzte Werte mit übersetzen, wenn sie selbst im Wörterbuch stehen (z. B. „Keyframe-Spur für „Höhe“ anlegen“)
       const fill = (v = '') => (v && exact.get(v)?.[i]) || v;
-      if (!order) return list[i].replace(/\$(\d)/g, (_, n) => fill(m[Number(n)]));
-      return list[i].replace(/\{(\d)\}/g, (_, n) => fill(m[order.indexOf(Number(n)) + 1]));
+      if (!order) return text.replace(/\$(\d)/g, (_, n) => fill(m[Number(n)]));
+      return text.replace(/\{(\d)\}/g, (_, n) => fill(m[order.indexOf(Number(n)) + 1]));
     }
     return null;
   }
