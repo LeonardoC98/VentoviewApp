@@ -103,7 +103,8 @@ async function init() {
     // Das Overlay von derselben Webseite wie der Editor, der „Anzeigen“ geklickt hat (z. B. die lokale Test-Seite)
     overlayUrl: (id, site) => {
       const base = site && allowedOrigins().includes(site) ? site : config.get('siteUrl');
-      const url = new URL(`overlay/?d=${encodeURIComponent(id)}&fit=1`, base);
+      // fit: ins Fenster einpassen · listen: Live-Audio auch im Rahmen (z. B. Visualizer als Hintergrund)
+      const url = new URL(`overlay/?d=${encodeURIComponent(id)}&fit=1&listen=1`, base);
       if (livePort() !== 47800) url.searchParams.set('port', livePort());
       return url.href;
     },
@@ -115,6 +116,8 @@ async function init() {
   bridge.handle('screens.list', () => screens.list());
   bridge.handle('screens.show', (msg) => screens.show(msg));
   bridge.handle('screens.hide', (msg) => screens.hide(msg));
+  bridge.handle('screens.remove', (msg) => screens.remove(msg));
+  bridge.handle('screens.move', (msg) => screens.move(msg));
   bridge.handle('designs.list', () => designs.list());
   // Live-Audio: Eingänge, Systemsound und Programme zum Auswählen im Editor
   bridge.handle('liveaudio.sources', () => liveAudio.list());
