@@ -46,7 +46,7 @@ class Screens extends EventEmitter {
       });
   }
 
-  // Gemerkt je Bildschirm: { items: [{ design, mode, site }] } – von unten nach oben
+  // Gemerkt je Bildschirm: { items: [{ design, mode, site, on }] } – von unten nach oben; on: false = pausiert
   items(key) {
     const stored = (this.config.get('screens') || {})[key];
     if (!stored) return [];
@@ -65,7 +65,7 @@ class Screens extends EventEmitter {
   list() {
     return this.displays().map(({ display, ...d }) => ({
       ...d,
-      items: this.items(d.key).map(({ design, mode }) => ({ design, mode })),
+      items: this.items(d.key).map(({ design, mode, on }) => ({ design, mode, on: on !== false })),
       errors: Object.fromEntries(MODES.map((mode) => [mode, this.windows.get(`${d.key}|${mode}`)?.error || null]).filter(([, e]) => e)),
     }));
   }
@@ -78,7 +78,7 @@ class Screens extends EventEmitter {
     const target = this.displays().find((d) => d.key === key);
     if (!target) throw new Error('Diesen Bildschirm gibt es gerade nicht.');
     const items = this.items(key).filter((i) => i.design !== String(design));
-    items.push({ design: String(design), mode, site: typeof site === 'string' ? site : null });
+    items.push({ design: String(design), mode, site: typeof site === 'string' ? site : null, on: true });
     this.setItems(key, items);
     await this.sync(target);
     this.changed();
@@ -109,6 +109,38 @@ class Screens extends EventEmitter {
     if (target) await this.sync(target);
     this.changed();
     return this.list();
+  }
+
+  // Ein Design pausieren bzw. wieder zeigen, ohne es vom Stapel zu nehmen
+  async toggle({ screen: key, design, on = true } = {}) {
+    this.setItems(key, this.items(key).map((i) => (i.design === design ? { ...i, on: Boolean(on) } : i)));
+    const target = this.displays().find((d) => d.key === key);
+    if (target) await this.sync(target);
+    this.changed();
+    return this.list();
+  }
+
+  // Vorschau: Vollbild auf dem Bildschirm, Schachbrett hinter durchsichtigen Stellen, X oben rechts (oder Esc).
+  // designs: von unten nach oben, z. B. der Stapel plus das gerade bearbeitete Design obendrauf
+  async preview({ screen: key, designs = [], site = null } = {}) {
+    const target = this.displays().find((d) => d.key === key);
+    if (!target) throw new Error('Diesen Bildschirm gibt es gerade nicht.');
+    const urls = designs.filter(Boolean).map((id) => this.overlayUrl(String(id), site));
+    if (!urls.length) throw new Error('Nichts zum Anzeigen.');
+    if (this.previewWin && !this.previewWin.isDestroyed()) this.previewWin.destroy();
+    const win = new this.BrowserWindow({
+      ...target.display.bounds, frame: false, show: false, backgroundColor: '#18181d', title: 'Ventoview – Vorschau',
+      webPreferences: { backgroundThrottling: false },
+    });
+    this.previewWin = win;
+    win.webContents.setAudioMuted(true);
+    await win.loadURL(stackUrl(urls, { preview: true }));
+    if (win.isDestroyed()) return true;
+    win.setBounds(target.display.bounds);
+    win.setFullScreen(true);
+    win.show();
+    win.focus();
+    return true;
   }
 
   // Ganzen Bildschirm leeren
@@ -161,7 +193,7 @@ class Screens extends EventEmitter {
     const items = this.items(target.key);
     for (const mode of MODES) {
       const id = `${target.key}|${mode}`;
-      const urls = items.filter((i) => i.mode === mode).map((i) => this.overlayUrl(i.design, i.site));
+      const urls = items.filter((i) => i.mode === mode && i.on !== false).map((i) => this.overlayUrl(i.design, i.site));
       const open = this.windows.get(id);
       if (!urls.length) {
         this.close(id);
@@ -286,14 +318,17 @@ class Screens extends EventEmitter {
       if (!entry.win.isDestroyed()) entry.win.destroy();
     }
     this.windows.clear();
+    if (this.previewWin && !this.previewWin.isDestroyed()) this.previewWin.destroy();
     this.helper?.kill();
   }
 }
 
-// Seite mit den Designs übereinander (je Design ein Overlay-Rahmen, das letzte liegt oben)
-function stackUrl(urls) {
+// Seite mit den Designs übereinander (je Design ein Overlay-Rahmen, das letzte liegt oben); preview: mit Schachbrett
+// und Schließen-Knopf
+function stackUrl(urls, { preview = false } = {}) {
   const url = new URL(`file:///${STACK_PAGE.replace(/\\/g, '/')}`);
   for (const u of urls) url.searchParams.append('u', u);
+  if (preview) url.searchParams.set('preview', '1');
   return url.href;
 }
 

@@ -118,6 +118,8 @@ async function init() {
   bridge.handle('screens.hide', (msg) => screens.hide(msg));
   bridge.handle('screens.remove', (msg) => screens.remove(msg));
   bridge.handle('screens.move', (msg) => screens.move(msg));
+  bridge.handle('screens.toggle', (msg) => screens.toggle(msg));
+  bridge.handle('screens.preview', (msg) => screens.preview(msg));
   bridge.handle('designs.list', () => designs.list());
   // Live-Audio: Eingänge, Systemsound und Programme zum Auswählen im Editor
   bridge.handle('liveaudio.sources', () => liveAudio.list());
