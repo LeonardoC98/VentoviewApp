@@ -1,0 +1,6 @@
+{
+  "name": "ventoview-screens-test",
+  "productName": "Ventoview Bildschirm-Test",
+  "private": true,
+  "main": "main.js"
+}
