@@ -18,7 +18,11 @@ const DEFAULTS = {
 class Config {
   constructor(file) {
     this.file = file;
-    this.values = { ...DEFAULTS, ...readJson(file) };
+    const stored = readJson(file);
+    // Die Test-Adresse (ngrok) stand früher in jeder Einstellungs-Datei – bringt die App inzwischen eine andere Adresse
+    // mit (die echte Domain), gilt die neue. Eine bewusst eingestellte andere Adresse (z. B. localhost) bleibt.
+    if (/\.ngrok(-free)?\.(app|dev|io)\b/.test(stored.siteUrl || '') && !/ngrok/.test(DEFAULTS.siteUrl)) delete stored.siteUrl;
+    this.values = { ...DEFAULTS, ...stored };
   }
 
   get(key) {
@@ -28,9 +32,12 @@ class Config {
   set(patch) {
     Object.assign(this.values, patch);
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    // Nur speichern, was vom Standard abweicht – sonst bliebe z. B. die Webseiten-Adresse für immer stehen, auch wenn
+    // eine neue App-Version eine andere mitbringt
+    const own = Object.fromEntries(Object.entries(this.values).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(DEFAULTS[key])));
     // Erst in eine Temp-Datei schreiben, damit ein Absturz die Einstellungen nicht zerstört
     const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.values, null, 2));
+    fs.writeFileSync(tmp, JSON.stringify(own, null, 2));
     fs.renameSync(tmp, this.file);
   }
 }

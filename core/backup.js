@@ -4,14 +4,16 @@ const path = require('node:path');
 const zlib = require('node:zlib');
 const { pipeline } = require('node:stream/promises');
 const { Readable } = require('node:stream');
+const { DEFAULTS } = require('./config');
 
 const MAGIC = 'VVIEW1';
 const FORMAT = 'ventoview-backup';
 // Was gesichert wird (Ordner in den App-Daten) – Modul-Code und Erweiterungen nicht: die lädt die App selbst,
 // und fremder Code aus einer Datei darf nie ausgeführt werden
 const DIRS = ['designs', 'assets', 'module-data'];
-// Verbindungen bleiben auf diesem PC: mit ihnen könnte jeder, der die Datei bekommt, das Konto benutzen
-const LOCAL_ONLY = ['account', 'twitch', 'trayHintShown'];
+// Verbindungen bleiben auf diesem PC: mit ihnen könnte jeder, der die Datei bekommt, das Konto benutzen.
+// Adresse der Webseite und Port auch – ein altes Backup soll die App nicht auf eine frühere Adresse zurückstellen.
+const LOCAL_ONLY = ['account', 'twitch', 'trayHintShown', 'siteUrl', 'port'];
 const MAX_FILES = 20000;
 
 /**
@@ -122,8 +124,13 @@ class Backup {
     const keep = Object.fromEntries(LOCAL_ONLY.map((key) => [key, this.config.get(key)]));
     const next = { ...backup.manifest.config };
     for (const key of LOCAL_ONLY) delete next[key];
-    // Alte Einstellungen ganz ersetzen (nicht nur ergänzen), Verbindungen behalten
-    for (const key of Object.keys(this.config.values)) if (!(key in next) && !LOCAL_ONLY.includes(key)) delete this.config.values[key];
+    // Alte Einstellungen ganz ersetzen (nicht nur ergänzen), Verbindungen behalten. Was das Backup nicht kennt, geht
+    // auf den Standard zurück (statt zu fehlen – neuere Einstellungen gab es beim Sichern vielleicht noch nicht)
+    for (const key of Object.keys(this.config.values)) {
+      if (key in next || LOCAL_ONLY.includes(key)) continue;
+      if (key in DEFAULTS) this.config.values[key] = DEFAULTS[key];
+      else delete this.config.values[key];
+    }
     this.config.set({ ...next, ...keep });
   }
 
