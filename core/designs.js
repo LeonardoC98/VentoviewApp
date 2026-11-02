@@ -131,6 +131,12 @@ class DesignStore {
     await this.updateIndex((index) => { delete index[file]; });
   }
 
+  // Höchstgröße einer Datei nach ihrer Endung – wie beim Hochladen
+  maxSize(file) {
+    const ext = path.extname(String(file)).slice(1).toLowerCase();
+    return Math.max(0, ...Object.values(TYPES).filter((t) => t.ext === ext).map((t) => t.max));
+  }
+
   assetPath(file) {
     return ASSET_FILE.test(file) ? path.join(this.assetsDir, file) : null;
   }

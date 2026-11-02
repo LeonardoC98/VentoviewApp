@@ -7,6 +7,11 @@ const MANIFEST = 'ventoview-export.json';
 const MEDIA_FILE = /^[a-f0-9]{32}\.(png|jpg|gif|webp|mp4|webm|mov|mp3|wav|ogg|m4a)$/;
 const HUB_PATH = /^hub\/[\w-]{1,60}\/$/;
 const LAYOUTS = ['grid', 'list', 'ring'];
+// Grenzen für einen Import – ein Export von jemand anderem soll die Festplatte nicht füllen können
+const MAX_MANIFEST = 120 * 1024 * 1024;
+const MAX_DESIGNS = 200;
+const MAX_FILES = 500;
+const MAX_TOTAL = 2 * 1024 * 1024 * 1024;
 const SIZES = ['s', 'm', 'l'];
 
 /**
@@ -90,37 +95,53 @@ class Sharing {
   async importFrom(dir) {
     let data;
     try {
-      data = JSON.parse(await fs.readFile(path.join(dir, MANIFEST), 'utf8'));
+      const manifest = path.join(dir, MANIFEST);
+      if ((await fs.stat(manifest)).size > MAX_MANIFEST) throw new Error('too big');
+      data = JSON.parse(await fs.readFile(manifest, 'utf8'));
     } catch {
       throw new Error(`In diesem Ordner liegt keine ${MANIFEST}. Wähle den Ordner, den Ventoview beim Exportieren erstellt hat.`);
     }
-    return this.apply(data, async (file) => fs.readFile(path.join(dir, 'media', file)));
+    return this.apply(data, {
+      size: async (file) => (await fs.stat(path.join(dir, 'media', file))).size,
+      read: (file) => fs.readFile(path.join(dir, 'media', file)),
+    });
   }
 
   // Vorlage aus dem Hub der Webseite (/hub/<name>/) – gleiches Format, Dateien kommen per HTTP
   async importFromSite(rel) {
     if (!HUB_PATH.test(rel)) throw new Error('Ungültige Hub-Vorlage.');
     const base = new URL(rel, this.siteUrl());
-    const get = async (name) => {
+    const get = async (name, max) => {
       const res = await fetch(new URL(name, base), { cache: 'no-store' });
       if (!res.ok) throw new Error(`Download fehlgeschlagen (HTTP ${res.status}).`);
-      return Buffer.from(await res.arrayBuffer());
+      if (Number(res.headers.get('content-length')) > max) throw new Error('Datei zu groß.');
+      const body = Buffer.from(await res.arrayBuffer());
+      if (body.length > max) throw new Error('Datei zu groß.');
+      return body;
     };
-    const data = JSON.parse((await get(MANIFEST)).toString('utf8'));
-    return this.apply(data, (file) => get(`media/${file}`));
+    const data = JSON.parse((await get(MANIFEST, MAX_MANIFEST)).toString('utf8'));
+    return this.apply(data, { size: async () => null, read: (file) => get(`media/${file}`, this.designs.maxSize(file)) });
   }
 
-  async apply(data, readMedia) {
+  // source: { size(file) → Bytes oder null (unbekannt), read(file) → Buffer }
+  async apply(data, source) {
     if (data?.format !== FORMAT || !Array.isArray(data.designs)) throw new Error('Das ist kein Ventoview-Export.');
+    if (data.designs.length > MAX_DESIGNS) throw new Error(`Zu viele Vorlagen in einem Export (höchstens ${MAX_DESIGNS}).`);
 
     let media = 0;
+    let total = 0;
     const index = await this.designs.readIndex();
-    for (const item of data.media || []) {
+    for (const item of (Array.isArray(data.media) ? data.media : []).slice(0, MAX_FILES)) {
       if (!MEDIA_FILE.test(item.file || '')) continue;
       const target = path.join(this.designs.assetsDir, item.file);
       if (index[item.file]) continue; // schon da (gleicher zufälliger Name = gleiche Datei)
-      const content = await readMedia(item.file).catch(() => null);
-      if (!content) continue;
+      // Zu große Dateien (wie beim Hochladen) und alles über der Grenze für den ganzen Import bleiben draußen
+      const max = this.designs.maxSize(item.file);
+      const size = await source.size(item.file).catch(() => null);
+      if (size != null && (size > max || total + size > MAX_TOTAL)) continue;
+      const content = await source.read(item.file).catch(() => null);
+      if (!content || content.length > max || total + content.length > MAX_TOTAL) continue;
+      total += content.length;
       await fs.writeFile(target, content);
       await this.designs.updateIndex((idx) => {
         idx[item.file] = { name: String(item.name || item.file).slice(0, 120), kind: item.kind || kindOf(item.file), size: content.length, addedAt: Date.now() };
