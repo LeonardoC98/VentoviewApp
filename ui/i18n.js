@@ -14,6 +14,10 @@
   let lang = 'de';
   // Im Overlay (Browser-Quelle im Stream) nur t() für Vorlagen – die Seite selbst nicht übersetzen, das kostet Zeit
   const domless = typeof location !== 'undefined' && location.pathname.startsWith('/overlay');
+  // Sprachfassungen der Webseite (/en/ …, vom Build schon übersetzt): <html data-page-lang="en"> – die Sprache steht
+  // fest; die Sprachwahl wechselt dort zur passenden Fassung, statt die Seite umzuschreiben
+  const pageLang = typeof document !== 'undefined' && LANGS.includes(document.documentElement?.dataset?.pageLang)
+    ? document.documentElement.dataset.pageLang : null;
   let observer = null;
   const listeners = new Set();
 
@@ -100,8 +104,8 @@
     }
     const original = node.vvSrc;
     const tr = lookup(original);
-    // Leerraum vorn und hinten behalten (Abstände zwischen Textstücken)
-    const next = tr == null ? original : `${original.match(/^\s*/)[0]}${tr}${original.match(/\s*$/)[0]}`;
+    // Leerraum vorn und hinten behalten (Abstände zwischen Textstücken) – außer vor einem Satzzeichen („… klicken.“ → „.“)
+    const next = tr == null ? original : `${/^[.,)]/.test(tr) ? '' : original.match(/^\s*/)[0]}${tr}${original.match(/\s*$/)[0]}`;
     if (node.data !== next) node.data = next;
     node.vvSet = next;
   }
@@ -220,11 +224,16 @@
     return 'en';
   }
   const clients = new Set(); // Verbindungen zur App auf dieser Seite
-  function choose(code, { at = Date.now(), save = true, push = true } = {}) {
+  function choose(code, { at = Date.now(), save = true, push = true, follow = true } = {}) {
     if (save) {
       try { localStorage.setItem(KEY, JSON.stringify({ code, at })); } catch { /* egal */ }
     }
-    setLang(code);
+    if (pageLang) {
+      const alt = follow && code !== pageLang && document.querySelector(`link[rel="alternate"][hreflang="${code}"]`);
+      if (alt) location.href = alt.href;
+    } else {
+      setLang(code);
+    }
     // Auf der Webseite gewählt → auch die App umstellen
     if (push) for (const c of clients) if (c.connected) c.request('app.language.set', { code, at }).catch(() => {});
   }
@@ -248,7 +257,7 @@
       const app = await client.request('app.language');
       const mine = stored();
       if (app && LANGS.includes(app.code) && (!mine || (app.at || 0) > mine.at)) {
-        choose(app.code, { at: app.at || Date.now(), push: false });
+        choose(app.code, { at: app.at || Date.now(), push: false, follow: false });
       } else if (mine && (!app || mine.at > (app.at || 0))) {
         await client.request('app.language.set', { code: mine.code, at: mine.at });
       }
@@ -270,7 +279,7 @@
   // Webseite: gespeicherte Wahl oder Browsersprache. Die App setzt ihre Sprache selbst (setLang aus dem Zustand).
   if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) {
     const s = stored();
-    lang = s ? s.code : browserLang();
+    lang = pageLang || (s ? s.code : browserLang());
     if (typeof document !== 'undefined') document.documentElement.lang = lang;
   }
 })(typeof window !== 'undefined' ? window : globalThis);

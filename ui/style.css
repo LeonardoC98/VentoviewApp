@@ -237,9 +237,6 @@ code { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: 
 .dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
 .dialog-head h3 { margin: 0; font-size: 16px; }
 .settings-form .setting { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-.settings-form .setting.inline { grid-template-columns: 1fr auto; align-items: center; }
-.setting-label { display: grid; gap: 2px; }
-.setting-label small { color: var(--muted); font-size: 12.5px; }
 .settings-form textarea, .settings-form input[type=text], .settings-form input[type=number] {
   width: 100%; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
   color: var(--text); font: 13px Consolas, monospace; resize: vertical;
@@ -349,7 +346,6 @@ button.brand:hover { background: rgba(255, 255, 255, .06); }
 .rnd-chance small { width: 54px; text-align: right; color: var(--muted, #8b8b99); font-size: 11.5px; }
 .rnd-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 
-.blocks-hint { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; }
 
 .blocks-file { display: flex; gap: 6px; width: 100%; }
 
