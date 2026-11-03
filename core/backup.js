@@ -13,7 +13,7 @@ const FORMAT = 'ventoview-backup';
 const DIRS = ['designs', 'assets', 'module-data'];
 // Verbindungen bleiben auf diesem PC: mit ihnen könnte jeder, der die Datei bekommt, das Konto benutzen.
 // Adresse der Webseite und Port auch – ein altes Backup soll die App nicht auf eine frühere Adresse zurückstellen.
-const LOCAL_ONLY = ['account', 'twitch', 'trayHintShown', 'siteUrl', 'port', 'screens'];
+const LOCAL_ONLY = ['account', 'twitch', 'connections', 'trayHintShown', 'siteUrl', 'port', 'screens'];
 const MAX_FILES = 20000;
 
 /**

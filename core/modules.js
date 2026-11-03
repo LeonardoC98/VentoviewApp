@@ -10,9 +10,9 @@ const { EventEmitter } = require('node:events');
  * einen eigenen Datenordner unter <dataDir>/<id>/, der Updates überlebt.
  */
 class ModuleManager extends EventEmitter {
-  // Pfad einer öffentlichen Moduldatei (für den lokalen Dienst) – nur einfache Bild-Dateinamen
+  // Pfad einer öffentlichen Moduldatei (für den lokalen Dienst) – nur einfache Bild- und Ton-Dateinamen
   publicFile(id, name) {
-    if (!this.running.has(id) || !/^[\w.-]{1,100}\.(png|jpe?g|gif|webp)$/i.test(name)) return null;
+    if (!this.running.has(id) || !/^[\w.-]{1,100}\.(png|jpe?g|gif|webp|wav|mp3|ogg)$/i.test(name)) return null;
     return path.join(this.dataDir, id, 'public', name);
   }
 
@@ -27,8 +27,10 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, speech }) {
     super();
+    this.connections = connections; // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream)
+    this.speech = speech;           // Vorlesen mit den Stimmen von Windows
     this.systemLocale = systemLocale; // () => z. B. 'de-DE' (Sprache von Windows)
     this.keys = keys;       // globale Tastendrücke (nur solange ein Modul zuhört)
     this.appVersion = appVersion || '0.0.0';
@@ -173,6 +175,26 @@ class ModuleManager extends EventEmitter {
           entry.cleanups.push(() => this.twitch.off('change', callback));
         },
       },
+      // Spenden-Dienste der App: on(callback) bekommt jede Spende als { source, sourceName, type: 'donation', user,
+      // amount, currency, message, test } – siehe core/connections.js
+      connections: this.connections && {
+        on: (callback) => {
+          this.connections.on('event', callback);
+          entry.cleanups.push(() => this.connections.off('event', callback));
+        },
+        state: () => this.connections.state(),
+      },
+      // Vorlesen: speak(text, { voice, rate, volume }) → Adresse einer WAV-Datei für Ton-Ebenen im Overlay
+      // (/files/<id>/tts-….wav); voices() → installierte Stimmen. Es bleiben die letzten 20 Dateien.
+      tts: this.speech && {
+        voices: () => this.speech.voices(),
+        speak: async (text, opts = {}) => {
+          const name = `tts-${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}.wav`;
+          await this.speech.speak(text, path.join(publicDir, name), opts);
+          pruneSpeech(publicDir, 20);
+          return ctx.fileUrl(name);
+        },
+      },
       // Erweiterung, die das Modul in module.json → "requires" angibt (z. B. globale Tastenkürzel)
       extension: (name) => (manifest.requires?.extension === name ? this.extensions?.get(name) ?? null : null),
       publish: (data) => this.bridge.publish(id, data),
@@ -187,6 +209,7 @@ class ModuleManager extends EventEmitter {
 
     this.bridge.moduleChanged(id);
     this.emit('change');
+    pruneSpeech(publicDir, 0); // Vorlese-Dateien vom letzten Mal
     try {
       entry.instance = require(path.join(moduleDir, 'index.js'));
       await entry.instance.start(ctx);
@@ -532,6 +555,14 @@ class ModuleManager extends EventEmitter {
   }
 }
 
+// Vorlese-Dateien eines Moduls: nur die neuesten keep behalten (Namen enthalten den Zeitpunkt, sortieren also richtig)
+async function pruneSpeech(dir, keep) {
+  try {
+    const files = (await fs.readdir(dir)).filter((name) => /^tts-\w+\.wav$/.test(name)).sort();
+    await Promise.all(files.slice(0, Math.max(0, files.length - keep)).map((name) => fs.rm(path.join(dir, name), { force: true })));
+  } catch { /* Ordner fehlt */ }
+}
+
 // Zufallsgeneratoren (z. B. !lucky): Name (für {zufall_name}), Befehl, Abklingzeit, Antwort-Art, Antworttext
 // mit {treffer} und Einträge mit Gewicht (Chance relativ zu den anderen; 0 = kommt nie)
 function cleanRandomizers(raw) {
@@ -556,7 +587,7 @@ function cleanRandomizers(raw) {
 
 // Bot-Elemente des Chat-Bots: nur bekannte Arten und Felder, Texte begrenzt
 const BLOCK_TYPES = ['command', 'generator', 'random', 'timer', 'schedule', 'shortcut', 'counter', 'welcome', 'event'];
-const EVENT_KINDS = ['any', 'follow', 'sub', 'resub', 'giftsub', 'bits', 'raid', 'redeem'];
+const EVENT_KINDS = ['any', 'follow', 'sub', 'resub', 'giftsub', 'bits', 'raid', 'redeem', 'donation'];
 function cleanBlocks(raw) {
   const str = (v, max = 450) => String(v ?? '').slice(0, max);
   const word = (v) => String(v ?? '').trim().split(/\s+/)[0].slice(0, 40);

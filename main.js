@@ -23,6 +23,8 @@ const { tr } = require('./core/i18n-main');
 const locale = () => (config?.get('language') || {}).code || 'en';
 const t = (text, ...args) => tr(locale(), text, ...args);
 const { TwitchAuth } = require('./core/twitch');
+const { Connections } = require('./core/connections');
+const { Speech } = require('./core/speech');
 const { Updater } = require('./core/updater');
 
 const ASSETS = path.join(__dirname, 'assets');
@@ -38,6 +40,7 @@ let modules;
 let extensions;
 let sharing;
 let updater;
+let connections;
 let keywordSources;
 let references;
 let liveAudio;
@@ -151,6 +154,9 @@ async function init() {
   account = new Account({ config, siteUrl: () => config.get('siteUrl') });
   twitch = new TwitchAuth({ config, safeStorage, openExternal: (url) => shell.openExternal(url) });
   twitch.on('change', pushState);
+  // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream) – Schlüssel bleiben verschlüsselt auf diesem PC
+  connections = new Connections({ config, safeStorage });
+  connections.on('change', pushState);
   bridge.handle('license.state', () => account.state());
   bridge.handle('license.set', (msg) => account.set(msg));
   bridge.handle('license.refresh', () => account.refresh());
@@ -179,6 +185,8 @@ async function init() {
     config,
     extensions,
     systemLocale: () => app.getLocale(),
+    connections,
+    speech: new Speech(),
   });
   modules.on('change', pushState);
   // Wo eigene Namen benutzt werden – fürs Umbenennen und Warnen vor dem Löschen (App-Keywords und Webseiten-Editor)
@@ -250,6 +258,7 @@ async function init() {
   await startBridge();
   await extensions.loadInstalled();
   await modules.loadInstalled();
+  connections.start();
   account.start();
   // Gemerkte Bildschirm-Anzeigen wieder zeigen (die Overlays brauchen dafür den lokalen Dienst)
   screens.watch();
@@ -412,6 +421,7 @@ function getState() {
     update: updater.state,
     account: account?.state() ?? null,
     twitch: twitch?.state() ?? null,
+    connections: connections?.state() ?? null,
     extensions: extensions?.list() ?? [],
     extensionsAvailable: modules?.registry?.extensions || [],
     shareDir: sharing?.shareDir ?? null,
@@ -637,6 +647,7 @@ handle('backup:load', async () => {
   // Alles anhalten, dann ersetzen und neu starten
   quitting = true;
   keywordSources?.stop();
+  connections?.stop();
   await modules?.stopAll();
   await extensions?.stopAll();
   await bridge?.close();
@@ -671,6 +682,9 @@ handle('account:disconnect', () => account.clear());
 handle('twitch:connect', () => twitch.connect());
 handle('twitch:cancel', () => twitch.cancel());
 handle('twitch:disconnect', () => twitch.disconnect());
+handle('connections:save', (id, values) => connections.save(String(id), values));
+handle('connections:remove', (id) => connections.remove(String(id)));
+handle('connections:test', (id) => connections.test(String(id)));
 handle('modules:action', (id, name) => modules.action(id, name));
 handle('update:check', () => updater.check());
 handle('update:install', () => updater.install());
@@ -772,6 +786,7 @@ app.on('before-quit', async (event) => {
   quitting = true;
   event.preventDefault();
   keywordSources?.stop();
+  connections?.stop();
   screens?.stop();
   await modules?.stopAll();
   await extensions?.stopAll();

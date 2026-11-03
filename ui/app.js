@@ -239,6 +239,7 @@ function render() {
 
   renderAccount();
   renderTwitch();
+  renderConnections();
   renderExtensions();
   renderIcons();
   $('about').textContent = `Ventoview ${version}${state.installed ? '' : ' · nicht installiert (Test- oder Entwicklungsversion)'}`;
@@ -398,6 +399,55 @@ function renderTwitch() {
           : h('button', { class: 'btn twitch', type: 'button', onclick: () => run('connectTwitch') }, 'Mit Twitch verbinden'),
     ),
   );
+}
+
+// Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream): Schlüssel eintragen, verbinden, testen. Die Eingabefelder
+// bleiben beim Neuzeichnen erhalten, damit Getipptes nicht verschwindet.
+const DONATION_HELP = {
+  streamelements: 'JWT-Token aus StreamElements → Konto → Kanäle → „Geheimnisse anzeigen“.',
+  streamlabs: '„Socket API Token“ aus Streamlabs → Einstellungen → API-Einstellungen → API-Token.',
+  tipeeestream: 'API-Schlüssel aus Tipeeestream → Einstellungen → API, dazu dein Benutzername dort.',
+};
+const donationInputs = new Map(); // Dienst → { token, user }
+function renderConnections() {
+  const list = state.connections || {};
+  $('donationPanels').replaceChildren(...Object.entries(list).map(([id, c]) => {
+    const inputs = donationInputs.get(id) || {
+      token: h('input', { type: 'password', class: 'code-input secret-input', placeholder: 'Schlüssel', autocomplete: 'off', spellcheck: 'false' }),
+      user: h('input', { type: 'text', class: 'code-input secret-input', placeholder: 'Benutzername', autocomplete: 'off', spellcheck: 'false' }),
+    };
+    donationInputs.set(id, inputs);
+    const save = async () => {
+      const res = await run('saveConnection', id, { token: inputs.token.value.trim(), user: inputs.user.value.trim() });
+      if (res.ok) {
+        inputs.token.value = '';
+        inputs.user.value = '';
+      }
+    };
+    if (!inputs.bound) {
+      for (const input of [inputs.token, inputs.user]) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+      inputs.bound = true;
+    }
+    const dot = c.state === 'connected' ? 'ok' : c.state === 'error' ? 'error' : c.state === 'off' ? 'idle' : 'warn';
+    return h('div', { class: 'panel connection' },
+      h('div', { class: 'connection-text' },
+        h('b', {}, `${c.name} – Spenden`),
+        c.configured
+          ? h('span', {}, h('span', { class: `dot ${dot}` }), c.text || 'Verbinde …')
+          : h('span', {}, h('span', { class: 'dot idle' }), DONATION_HELP[id] || '')),
+      h('div', { class: 'connection-actions' },
+        c.configured
+          ? [
+            h('button', { class: 'btn ghost', type: 'button', title: 'Schickt eine Probe-Spende an Alerts, Ziele und Chat-Bot', onclick: () => run('testConnection', id) }, 'Testen'),
+            h('button', { class: 'btn ghost', type: 'button', onclick: () => run('removeConnection', id) }, 'Trennen'),
+          ]
+          : [
+            c.fields.includes('user') ? inputs.user : null,
+            inputs.token,
+            h('button', { class: 'btn', type: 'button', onclick: save }, 'Verbinden'),
+          ]),
+    );
+  }));
 }
 
 function renderUpdate() {

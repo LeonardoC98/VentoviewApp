@@ -570,3 +570,6 @@ select option { background: #17171f; color: #f2f2f5; }
 .card.wip .tile { filter: grayscale(1); opacity: .45; }
 .card.wip .card-title { color: var(--muted); }
 .badge.wip { background: #2a2a33; color: var(--muted); letter-spacing: .04em; }
+/* Spenden-Dienste: Schlüssel-Felder ohne Großschreibung, etwas breiter */
+.secret-input { width: 210px; text-transform: none; font-weight: 500; }
+#donationPanels { margin-bottom: 0; }
