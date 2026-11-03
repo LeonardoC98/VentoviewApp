@@ -630,16 +630,16 @@ const AXIS_NAMES = ['Linker Stick ↔', 'Linker Stick ↕', 'Rechter Stick ↔',
 
 function inputLabel(id) {
   let m = /^pad:b(\d+)$/.exec(id);
-  if (m) return `🎮 ${PAD_NAMES[m[1]] || `Taste ${Number(m[1]) + 1}`}`;
+  if (m) return `Gamepad ${PAD_NAMES[m[1]] || `Taste ${Number(m[1]) + 1}`}`;
   m = /^pad:a(\d+)$/.exec(id);
-  if (m) return `🎮 ${AXIS_NAMES[m[1]] || `Achse ${Number(m[1]) + 1}`}`;
+  if (m) return `Gamepad ${AXIS_NAMES[m[1]] || `Achse ${Number(m[1]) + 1}`}`;
   // MIDI auf Kanal 2–16 hat „@Kanal“ hinten: midi:n11@2 (DJ-Controller: ein Kanal pro Deck)
   m = /^midi:(n|cc|pb)(\d*)(?:@(\d+))?$/.exec(id);
   if (m) {
     const ch = m[3] ? ` · Kanal ${m[3]}` : '';
-    if (m[1] === 'n') return `🎹 MIDI-Pad/Note ${m[2]}${ch}`;
-    if (m[1] === 'cc') return `🎹 MIDI-Regler CC ${m[2]}${ch}`;
-    return `🎹 Pitch-Bend${ch}`;
+    if (m[1] === 'n') return `MIDI-Pad/Note ${m[2]}${ch}`;
+    if (m[1] === 'cc') return `MIDI-Regler CC ${m[2]}${ch}`;
+    return `Pitch-Bend${ch}`;
   }
   return id;
 }
@@ -881,7 +881,7 @@ function randomizerEditor(field, initial) {
         // Aufbau wie im Web-Editor (Einstellungen → Zufallsgeneratoren)
         h('div', { class: 'rnd-head', onclick: () => { if (isOpen) open.delete(index); else open.add(index); draw(); } },
           h('span', {}, isOpen ? '▾' : '▸'),
-          h('b', {}, `🎲 ${r.command || r.name}`),
+          h('b', {}, r.command || r.name),
           h('small', { class: 'muted' }, `${r.entries.length} Einträge · {zufall_${r.name}}`),
           h('button', { type: 'button', class: 'btn ghost small', title: 'Löschen', onclick: async (ev) => { ev.stopPropagation(); if (await VVDialog.confirm(`„${r.command || r.name}“ löschen?`, { ok: 'Löschen', danger: true })) { list.splice(index, 1); open.delete(index); draw(); } } }, '×')),
         isOpen ? h('div', { class: 'rnd-body' },
