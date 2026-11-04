@@ -512,14 +512,16 @@ function openModuleSettings(id) {
   // Aufbau wie im Web-Editor (Reiter „Einstellungen“): gleiche Reihenfolge, gleiche Felder, Hinweis unter dem Feld.
   // Was es nur in der App gibt (Tasten aufnehmen, Bot exportieren …), steht ganz unten hinter einer feinen Linie.
   const help = (field) => (field.help ? h('p', { class: 'hint' }, field.help) : null);
-  const label = (field) => h('label', {}, field.label);
+  // In einer Gruppe (z. B. „Glücksrad“ im Modul Interaktion) reicht der Kurz-Name
+  const name = (field) => (field.group && field.short) || field.label;
+  const label = (field) => h('label', {}, name(field));
   const extras = [];
   const fields = mod.settings.map((field) => {
     const row = (...children) => h('div', { class: 'setting field', 'data-key': field.key }, ...children);
     if (field.type === 'toggle') {
       return row(h('label', { class: 'toggle' },
         h('input', { type: 'checkbox', name: field.key, checked: (values[field.key] ?? field.default) ? true : null, onchange: () => preview() }),
-        h('span', { class: 'tswitch' }), field.label), help(field));
+        h('span', { class: 'tswitch' }), name(field)), help(field));
     }
     if (field.type === 'select') {
       return row(label(field),
@@ -565,9 +567,24 @@ function openModuleSettings(id) {
       h('input', { type: field.type === 'number' ? 'number' : 'text', name: field.key, value: values[field.key] ?? '', placeholder: field.placeholder || '' }),
       help(field));
   });
+  // Einstellungen mit „group“ eingeklappt je Gruppe (wie im Editor) – sonst wird die Liste bei vielen Spielen endlos
+  const rows = [];
+  const groups = new Map();
+  mod.settings.forEach((field, i) => {
+    if (!field.group) {
+      rows.push(fields[i]);
+      return;
+    }
+    if (!groups.has(field.group)) {
+      const body = h('div', { class: 'setting-group-body' });
+      groups.set(field.group, body);
+      rows.push(h('details', { class: 'setting-group' }, h('summary', {}, field.group), body));
+    }
+    groups.get(field.group).append(fields[i]);
+  });
   const message = h('span', { class: 'message', role: 'status' });
   const form = h('form', { class: 'settings-form' },
-    ...fields,
+    ...rows,
     extras.length ? h('div', { class: 'app-extras' }, h('p', { class: 'app-extras-head' }, 'Nur in der App'), ...extras) : null,
     h('div', { class: 'actions' },
       message,

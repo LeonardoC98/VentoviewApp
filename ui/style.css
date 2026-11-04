@@ -573,3 +573,10 @@ select option { background: #17171f; color: #f2f2f5; }
 /* Spenden-Dienste: Schlüssel-Felder ohne Großschreibung, etwas breiter */
 .secret-input { width: 210px; text-transform: none; font-weight: 500; }
 #donationPanels { margin-bottom: 0; }
+/* Eingeklappte Gruppen in den Modul-Einstellungen (z. B. je Spiel im Modul Interaktion) */
+.settings-form .setting-group { margin: 6px 0; border: 1px solid var(--line); border-radius: 8px; }
+.settings-form .setting-group > summary { display: flex; align-items: center; gap: 8px; padding: 9px 12px; cursor: pointer; font-weight: 600; list-style: none; user-select: none; }
+.settings-form .setting-group > summary::-webkit-details-marker { display: none; }
+.settings-form .setting-group > summary::before { content: ""; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid var(--muted); transition: transform .15s; }
+.settings-form .setting-group[open] > summary::before { transform: rotate(90deg); }
+.settings-form .setting-group-body { padding: 0 12px 6px; }
