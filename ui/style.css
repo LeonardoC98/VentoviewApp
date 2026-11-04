@@ -284,6 +284,11 @@ code { padding: 1px 6px; border-radius: 5px; background: var(--panel-2); color: 
 .code { padding: 2px 8px; border-radius: 6px; background: rgba(145, 70, 255, .2); color: #d8c4ff; font: 700 14px Consolas, monospace; letter-spacing: 1px; }
 .btn.twitch { border-color: transparent; background: #9146ff; color: #fff; }
 .btn.twitch:hover { background: #7c3aed; }
+.btn.youtube { border-color: transparent; background: #ff0033; color: #fff; }
+.btn.youtube:hover { background: #e0002d; }
+.btn.kick { border-color: transparent; background: #53fc18; color: #0b0b0b; }
+.btn.kick:hover { background: #47d915; }
+.btn.youtube:disabled, .btn.kick:disabled { opacity: .45; cursor: default; }
 .plan { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
 .plan.free { background: rgba(52, 211, 153, .15); color: #34d399; }
 .plan.premium { background: rgba(139, 92, 246, .18); color: #c4b5fd; }

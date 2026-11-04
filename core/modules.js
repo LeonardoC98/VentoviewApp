@@ -27,9 +27,10 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, speech }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, platforms, speech }) {
     super();
     this.connections = connections; // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream)
+    this.platforms = platforms;     // YouTube und Kick (Chat, Ereignisse, schreiben)
     this.speech = speech;           // Vorlesen mit den Stimmen von Windows
     this.systemLocale = systemLocale; // () => z. B. 'de-DE' (Sprache von Windows)
     this.keys = keys;       // globale Tastendrücke (nur solange ein Modul zuhört)
@@ -183,6 +184,24 @@ class ModuleManager extends EventEmitter {
           entry.cleanups.push(() => this.connections.off('event', callback));
         },
         state: () => this.connections.state(),
+      },
+      // YouTube und Kick neben Twitch – siehe core/platforms.js. list() → [{ id, name, user, live, followers, subs }],
+      // onChat(callback) jede Chat-Nachricht, onEvent(callback) Follows, Abos, Super Chats, Kicks …, send(text, { platform })
+      platforms: this.platforms && {
+        list: () => this.platforms.connected(),
+        onChat: (callback) => {
+          this.platforms.on('chat', callback);
+          entry.cleanups.push(() => this.platforms.off('chat', callback));
+        },
+        onEvent: (callback) => {
+          this.platforms.on('event', callback);
+          entry.cleanups.push(() => this.platforms.off('event', callback));
+        },
+        onChange: (callback) => {
+          this.platforms.on('change', callback);
+          entry.cleanups.push(() => this.platforms.off('change', callback));
+        },
+        send: (text, opts) => this.platforms.send(text, opts),
       },
       // Vorlesen: speak(text, { voice, rate, volume }) → Adresse einer WAV-Datei für Ton-Ebenen im Overlay
       // (/files/<id>/tts-….wav); voices() → installierte Stimmen. Es bleiben die letzten 20 Dateien.

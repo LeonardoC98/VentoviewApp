@@ -239,6 +239,7 @@ function render() {
 
   renderAccount();
   renderTwitch();
+  renderPlatforms();
   renderConnections();
   renderExtensions();
   renderIcons();
@@ -399,6 +400,48 @@ function renderTwitch() {
           : h('button', { class: 'btn twitch', type: 'button', onclick: () => run('connectTwitch') }, 'Mit Twitch verbinden'),
     ),
   );
+}
+
+// YouTube und Kick: wie Twitch für Stream-Chat, Chat-Bot, Alerts, Ziele und Interaktion. Anmeldung über den
+// Ventoview-Server – dafür muss die App mit dem Konto verbunden sein
+const PLATFORM_TEXT = {
+  youtube: {
+    off: 'Nicht verbunden – Live-Chat, Super Chats und Mitgliedschaften deines YouTube-Kanals.',
+    pending: (p) => h('span', {}, 'Im Browser bei Google den Code ', h('code', { class: 'code' }, p.code), ' eingeben und bestätigen …'),
+  },
+  kick: {
+    off: 'Nicht verbunden – Chat, Follows, Abos, Kicks und Kanalpunkte deines Kick-Kanals.',
+    pending: () => h('span', {}, 'Im Browser bei Kick anmelden und bestätigen …'),
+  },
+};
+function renderPlatforms() {
+  const list = state.platforms || {};
+  const paired = Boolean(state.account?.paired);
+  $('platformPanels').replaceChildren(...Object.entries(list).map(([id, p]) => {
+    const texts = PLATFORM_TEXT[id] || {};
+    let line;
+    if (p.status === 'pending') line = texts.pending(p);
+    else if (p.status === 'connected') {
+      const chat = p.chat;
+      const dot = chat?.state === 'ok' ? 'ok' : chat?.state === 'error' ? 'error' : chat?.state === 'connecting' ? 'warn' : 'idle';
+      line = h('span', {}, h('span', { class: `dot ${dot}` }), `Verbunden als ${p.user}`, chat?.text ? h('span', {}, `· ${chat.text}`) : null);
+    } else {
+      const text = p.status === 'error' ? p.error
+        : p.available === false ? 'Kommt bald – auf dem Ventoview-Server noch nicht eingerichtet.'
+          : !paired ? 'Erst oben die App mit deinem Ventoview-Konto verbinden.' : texts.off;
+      line = h('span', {}, h('span', { class: `dot ${p.status === 'error' ? 'error' : 'idle'}` }), text);
+    }
+    return h('div', { class: 'panel connection' },
+      h('div', { class: 'connection-text' }, h('b', {}, p.name), line),
+      h('div', { class: 'connection-actions' },
+        p.status === 'connected'
+          ? h('button', { class: 'btn ghost', type: 'button', onclick: () => run('disconnectPlatform', id) }, 'Trennen')
+          : p.status === 'pending'
+            ? h('button', { class: 'btn ghost', type: 'button', onclick: () => run('cancelPlatform', id) }, 'Abbrechen')
+            : h('button', {
+              class: `btn ${id}`, type: 'button', disabled: !paired || p.available === false, onclick: () => run('connectPlatform', id),
+            }, `Mit ${p.name} verbinden`)));
+  }));
 }
 
 // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream): Schlüssel eintragen, verbinden, testen. Die Eingabefelder

@@ -24,6 +24,7 @@ const locale = () => (config?.get('language') || {}).code || 'en';
 const t = (text, ...args) => tr(locale(), text, ...args);
 const { TwitchAuth } = require('./core/twitch');
 const { Connections } = require('./core/connections');
+const { Platforms } = require('./core/platforms');
 const { Speech } = require('./core/speech');
 const { Updater } = require('./core/updater');
 
@@ -41,6 +42,7 @@ let extensions;
 let sharing;
 let updater;
 let connections;
+let platforms;
 let keywordSources;
 let references;
 let liveAudio;
@@ -157,6 +159,9 @@ async function init() {
   // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream) – Schlüssel bleiben verschlüsselt auf diesem PC
   connections = new Connections({ config, safeStorage });
   connections.on('change', pushState);
+  // YouTube und Kick: Anmeldung über den Ventoview-Server, Chat und Ereignisse einheitlich für die Module
+  platforms = new Platforms({ config, safeStorage, openExternal: (url) => shell.openExternal(url), siteUrl: () => config.get('siteUrl'), account });
+  platforms.on('change', pushState);
   bridge.handle('license.state', () => account.state());
   bridge.handle('license.set', (msg) => account.set(msg));
   bridge.handle('license.refresh', () => account.refresh());
@@ -186,6 +191,7 @@ async function init() {
     extensions,
     systemLocale: () => app.getLocale(),
     connections,
+    platforms,
     speech: new Speech(),
   });
   modules.on('change', pushState);
@@ -259,6 +265,7 @@ async function init() {
   await extensions.loadInstalled();
   await modules.loadInstalled();
   connections.start();
+  platforms.start();
   account.start();
   // Gemerkte Bildschirm-Anzeigen wieder zeigen (die Overlays brauchen dafür den lokalen Dienst)
   screens.watch();
@@ -422,6 +429,7 @@ function getState() {
     account: account?.state() ?? null,
     twitch: twitch?.state() ?? null,
     connections: connections?.state() ?? null,
+    platforms: platforms?.state() ?? null,
     extensions: extensions?.list() ?? [],
     extensionsAvailable: modules?.registry?.extensions || [],
     shareDir: sharing?.shareDir ?? null,
@@ -648,6 +656,7 @@ handle('backup:load', async () => {
   quitting = true;
   keywordSources?.stop();
   connections?.stop();
+  platforms?.stop();
   await modules?.stopAll();
   await extensions?.stopAll();
   await bridge?.close();
@@ -682,6 +691,9 @@ handle('account:disconnect', () => account.clear());
 handle('twitch:connect', () => twitch.connect());
 handle('twitch:cancel', () => twitch.cancel());
 handle('twitch:disconnect', () => twitch.disconnect());
+handle('platforms:connect', (id) => platforms.connect(String(id)));
+handle('platforms:cancel', (id) => platforms.cancel(String(id)));
+handle('platforms:disconnect', (id) => platforms.disconnect(String(id)));
 handle('connections:save', (id, values) => connections.save(String(id), values));
 handle('connections:remove', (id) => connections.remove(String(id)));
 handle('connections:test', (id) => connections.test(String(id)));
@@ -787,6 +799,7 @@ app.on('before-quit', async (event) => {
   event.preventDefault();
   keywordSources?.stop();
   connections?.stop();
+  platforms?.stop();
   screens?.stop();
   await modules?.stopAll();
   await extensions?.stopAll();
