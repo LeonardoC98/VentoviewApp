@@ -686,6 +686,16 @@ handle('modules:open', (id) => {
   return shell.openExternal(url.href);
 });
 handle('site:open', () => shell.openExternal(config.get('siteUrl')));
+// Rechtliches zu verbundenen Diensten (YouTube verlangt Links auf seine Bedingungen und Googles Datenschutz) – nur feste Adressen
+const LEGAL_LINKS = {
+  'youtube-terms': 'https://www.youtube.com/t/terms',
+  'google-privacy': 'https://policies.google.com/privacy',
+  'google-permissions': 'https://security.google.com/settings/security/permissions',
+};
+handle('legal:open', (which) => {
+  if (which === 'privacy') return shell.openExternal(new URL('datenschutz/', config.get('siteUrl')).href);
+  return LEGAL_LINKS[which] ? shell.openExternal(LEGAL_LINKS[which]) : null;
+});
 // Logo oben links: Home-Seite (Home, Module, Hub) – mit Port, falls nicht der Standard
 handle('site:home', () => {
   const url = new URL('home/', config.get('siteUrl'));

@@ -511,4 +511,10 @@ VVI18n.add({
   "Abgelehnt.": ["Declined.", "Rifiutato.", "Rechazado.", "Refusé."],
   "Der Code ist abgelaufen – bitte noch einmal verbinden.": ["The code has expired – please connect again.", "Il codice è scaduto – collega di nuovo.", "El código ha caducado – vuelve a conectar.", "Le code a expiré – reconnecte-toi."],
   "Kein laufender YouTube-Livestream.": ["No YouTube livestream running.", "Nessuna diretta YouTube in corso.", "No hay ningún directo de YouTube en marcha.", "Aucun live YouTube en cours."],
+  // YouTube: Hinweis zu den YouTube API Services
+  'Nutzt die YouTube API Services – mit dem Verbinden stimmst du den Nutzungsbedingungen von YouTube zu.': ['Uses the YouTube API Services – by connecting you agree to the YouTube Terms of Service.', 'Usa i servizi API di YouTube – collegandoti accetti i Termini di servizio di YouTube.', 'Usa los servicios de la API de YouTube: al conectar aceptas los Términos del servicio de YouTube.', 'Utilise les services d’API YouTube – en te connectant, tu acceptes les Conditions d’utilisation de YouTube.'],
+  'Nutzungsbedingungen von YouTube': ['YouTube Terms of Service', 'Termini di servizio di YouTube', 'Términos del servicio de YouTube', 'Conditions d’utilisation de YouTube'],
+  'Datenschutz von Google': ['Google Privacy Policy', 'Norme sulla privacy di Google', 'Política de privacidad de Google', 'Règles de confidentialité de Google'],
+  'Datenschutz von Ventoview': ['Ventoview privacy policy', 'Privacy di Ventoview', 'Privacidad de Ventoview', 'Confidentialité de Ventoview'],
+  'Zugriff bei Google widerrufen': ['Revoke access at Google', 'Revoca l’accesso su Google', 'Revocar el acceso en Google', 'Révoquer l’accès chez Google'],
 });

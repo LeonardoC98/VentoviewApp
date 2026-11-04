@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('streamhub', {
   testConnection: (id) => ipcRenderer.invoke('connections:test', id),
   openModule: (id) => ipcRenderer.invoke('modules:open', id),
   openSite: () => ipcRenderer.invoke('site:open'),
+  openLegal: (which) => ipcRenderer.invoke('legal:open', which),
   openHome: () => ipcRenderer.invoke('site:home'),
   saveSettings: (patch) => ipcRenderer.invoke('settings:save', patch),
   saveKeywords: (list, renames) => ipcRenderer.invoke('keywords:save', list, renames),

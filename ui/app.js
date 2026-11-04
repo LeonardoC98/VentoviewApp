@@ -432,8 +432,14 @@ function renderPlatforms() {
           : !paired ? 'Erst oben die App mit deinem Ventoview-Konto verbinden.' : texts.off;
       line = h('span', {}, h('span', { class: `dot ${p.status === 'error' ? 'error' : 'idle'}` }), text);
     }
+    // YouTube: Hinweis auf die YouTube API Services mit Links (Bedingungen von YouTube, Datenschutz von Google und Ventoview)
+    const legal = (which, text) => h('a', { href: '#', onclick: (e) => { e.preventDefault(); window.streamhub.openLegal(which); } }, text);
+    const notice = id === 'youtube' ? h('small', { class: 'connection-legal' },
+      h('span', {}, 'Nutzt die YouTube API Services – mit dem Verbinden stimmst du den Nutzungsbedingungen von YouTube zu.'), ' ',
+      legal('youtube-terms', 'Nutzungsbedingungen von YouTube'), ' · ', legal('google-privacy', 'Datenschutz von Google'), ' · ',
+      legal('privacy', 'Datenschutz von Ventoview'), ' · ', legal('google-permissions', 'Zugriff bei Google widerrufen')) : null;
     return h('div', { class: 'panel connection' },
-      h('div', { class: 'connection-text' }, h('b', {}, p.name), line),
+      h('div', { class: 'connection-text' }, h('b', {}, p.name), line, notice),
       h('div', { class: 'connection-actions' },
         p.status === 'connected'
           ? h('button', { class: 'btn ghost', type: 'button', onclick: () => run('disconnectPlatform', id) }, 'Trennen')
