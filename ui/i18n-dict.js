@@ -518,4 +518,7 @@ VVI18n.add({
   'Datenschutz von Google': ['Google Privacy Policy', 'Norme sulla privacy di Google', 'Política de privacidad de Google', 'Règles de confidentialité de Google'],
   'Datenschutz von Ventoview': ['Ventoview privacy policy', 'Privacy di Ventoview', 'Privacidad de Ventoview', 'Confidentialité de Ventoview'],
   'Zugriff bei Google widerrufen': ['Revoke access at Google', 'Revoca l’accesso su Google', 'Revocar el acceso en Google', 'Révoquer l’accès chez Google'],
+  // Plattformen in den Modul-Einstellungen (die Zustände übersetzt das Wörterbuch der Webseite)
+  'Plattformen': ['Platforms', 'Piattaforme', 'Plataformas', 'Plateformes'],
+  'Verbinden und trennen: oben unter Einstellungen.': ['Connect and disconnect: under Settings at the top.', 'Collegare e scollegare: in alto in Impostazioni.', 'Conectar y desconectar: arriba, en Ajustes.', 'Connecter et déconnecter : en haut, sous Paramètres.'],
 });

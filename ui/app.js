@@ -634,6 +634,7 @@ function openModuleSettings(id) {
   });
   const message = h('span', { class: 'message', role: 'status' });
   const form = h('form', { class: 'settings-form' },
+    h('div', { class: 'platform-rows', hidden: true }),
     ...rows,
     extras.length ? h('div', { class: 'app-extras' }, h('p', { class: 'app-extras-head' }, 'Nur in der App'), ...extras) : null,
     h('div', { class: 'actions' },
@@ -1182,10 +1183,30 @@ function dialEditor(field, lines) {
   return h('div', { class: 'hotkey-editor' }, rows, h('div', { class: 'hotkey-new' }, addBtn), hidden);
 }
 
+// Twitch, YouTube, Kick: worüber das Modul gerade läuft – wie im Web-Editor über dem ersten Feld. Das Modul meldet es
+// als Vorschläge „platforms“: [{ id, name, user, state: ok|idle|off, text }]
+function renderPlatformRows(mod) {
+  const box = $('moduleDialog').querySelector('.platform-rows');
+  if (!box) return;
+  const rows = mod?.suggestions?.platforms;
+  const key = Array.isArray(rows) ? JSON.stringify(rows) : '';
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.hidden = !key || !rows.length;
+  if (box.hidden) return box.replaceChildren();
+  const dot = { ok: 'ok', idle: 'warn' };
+  box.replaceChildren(h('label', {}, 'Plattformen'),
+    ...rows.map((r) => h('div', { class: 'platform-row' },
+      h('span', { class: `dot ${dot[r.state] || 'idle'}` }), h('b', {}, r.name),
+      r.user ? h('span', { 'data-no-i18n': true }, r.user) : null, h('span', { class: 'hint' }, r.text))),
+    h('p', { class: 'hint' }, 'Verbinden und trennen: oben unter Einstellungen.'));
+}
+
 // Vorschläge (z. B. gerade erkannte Quellen) live aktualisieren, ohne die Eingaben anzufassen
 function updateSuggestions() {
   if (!settingsModule || !$('moduleDialog').open) return;
   const mod = state.installed.find((m) => m.id === settingsModule);
+  renderPlatformRows(mod);
   for (const box of $('moduleDialog').querySelectorAll('.setting')) {
     const target = box.querySelector('.suggestions');
     if (!target) continue;
