@@ -17,6 +17,7 @@ const { KeywordSources, normalizeKeywords } = require('./core/keywords');
 const { ModuleManager } = require('./core/modules');
 const { References } = require('./core/references');
 const { LiveAudio } = require('./core/live-audio');
+const { LiveVideo } = require('./core/live-video');
 const { Screens } = require('./core/screens');
 const { tr } = require('./core/i18n-main');
 // Text in der eingestellten Sprache (Tray, Hinweise, Datei-Fenster)
@@ -46,6 +47,7 @@ let platforms;
 let keywordSources;
 let references;
 let liveAudio;
+let liveVideo;
 let account;
 let screens;
 let twitch;
@@ -89,9 +91,11 @@ async function init() {
   });
 
   liveAudio = new LiveAudio();
+  liveVideo = new LiveVideo();
   bridge = new Bridge({
     version: app.getVersion(),
     liveAudio,
+    liveVideo,
     audioLimit: () => config.get('audioLimit'),
     // Dazu die lokale Webseite (localhost:8080): Overlays in der Streaming-Software direkt vom eigenen PC laden –
     // ohne Tunnel und ohne dessen Warnseite
@@ -128,6 +132,8 @@ async function init() {
   bridge.handle('designs.list', () => designs.list());
   // Live-Audio: Eingänge, Systemsound und Programme zum Auswählen im Editor
   bridge.handle('liveaudio.sources', () => liveAudio.list());
+  // Live-Video: Kameras, Bildschirme und Fenster zum Auswählen im Editor
+  bridge.handle('livevideo.sources', () => liveVideo.list());
   bridge.handle('design.get', (msg) => designs.get(msg));
   bridge.handle('design.save', async (msg) => {
     const saved = await designs.save(msg);
@@ -192,6 +198,7 @@ async function init() {
     systemLocale: () => app.getLocale(),
     connections,
     platforms,
+    liveVideo,
     speech: new Speech(),
   });
   modules.on('change', pushState);
@@ -805,5 +812,6 @@ app.on('before-quit', async (event) => {
   await extensions?.stopAll();
   await bridge?.close();
   liveAudio?.close();
+  liveVideo?.close();
   app.quit();
 });

@@ -35,9 +35,10 @@ const MEDIA_TYPES = {
  *   { type: <name>, reqId, ... }    Anfrage an einen mit handle() registrierten Handler
  *
  * WebSocket /audio?src=<quelle>    Live-Audio (Mikrofon, App, Systemsound) als rohe Pakete: 48 kHz, Stereo, 16 Bit
+ * WebSocket /video?src=<quelle>    Live-Video (Kamera, Bildschirm, Fenster): Verbindungsaufbau für WebRTC (core/live-video.js)
  */
 class Bridge {
-  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset, liveAudio, audioLimit }) {
+  constructor({ version, allowedOrigins, moduleState, assetPath, moduleFile, uploadAsset, liveAudio, liveVideo, audioLimit }) {
     this.version = version;
     this.allowedOrigins = allowedOrigins; // () => string[]
     this.moduleState = moduleState;       // (id) => { installed, status }
@@ -45,6 +46,7 @@ class Bridge {
     this.moduleFile = moduleFile;         // (moduleId, name) => absoluter Pfad oder null
     this.uploadAsset = uploadAsset;       // ({ name, mime, length, stream }) => Promise<asset>
     this.liveAudio = liveAudio;           // { attach(ws, quelle) }
+    this.liveVideo = liveVideo;           // { attach(ws, quelle, { q, fps }) }
     this.audioLimit = audioLimit;         // () => { on, ceiling } – Audio-Schutz für alle Overlays
     this.handlers = new Map();
     this.latest = new Map();              // Modul-ID → zuletzt gesendete Daten
@@ -53,6 +55,7 @@ class Bridge {
     this.wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
     this.wss.on('connection', (ws) => this.onConnection(ws));
     this.audioWss = new WebSocketServer({ noServer: true, maxPayload: 1024 });
+    this.videoWss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
   }
 
   handle(type, fn) {
@@ -78,6 +81,7 @@ class Bridge {
     clearInterval(this.pingTimer);
     for (const ws of this.wss.clients) ws.terminate();
     for (const ws of this.audioWss.clients) ws.terminate();
+    for (const ws of this.videoWss.clients) ws.terminate();
     if (this.server) {
       this.server.closeAllConnections?.();
       await new Promise((resolve) => this.server.close(resolve));
@@ -206,6 +210,10 @@ class Bridge {
     const { pathname, searchParams } = new URL(req.url, 'http://127.0.0.1');
     if (pathname === '/audio' && this.liveAudio && this.isLocalHost(req) && this.isAllowedOrigin(req)) {
       this.audioWss.handleUpgrade(req, socket, head, (ws) => this.liveAudio.attach(ws, searchParams.get('src') || ''));
+      return;
+    }
+    if (pathname === '/video' && this.liveVideo && this.isLocalHost(req) && this.isAllowedOrigin(req)) {
+      this.videoWss.handleUpgrade(req, socket, head, (ws) => this.liveVideo.attach(ws, searchParams.get('src') || '', { q: searchParams.get('q'), fps: searchParams.get('fps') }));
       return;
     }
     if (pathname !== '/ws' || !this.isLocalHost(req) || !this.isAllowedOrigin(req)) {

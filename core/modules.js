@@ -27,8 +27,9 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, platforms, speech }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, platforms, liveVideo, speech }) {
     super();
+    this.liveVideo = liveVideo;     // Live-Video (Kameras, Bildschirme, Fenster) – Statistik und Fotos
     this.connections = connections; // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream)
     this.platforms = platforms;     // YouTube und Kick (Chat, Ereignisse, schreiben)
     this.speech = speech;           // Vorlesen mit den Stimmen von Windows
@@ -202,6 +203,17 @@ class ModuleManager extends EventEmitter {
           entry.cleanups.push(() => this.platforms.off('change', callback));
         },
         send: (text, opts) => this.platforms.send(text, opts),
+      },
+      // Live-Video der App: sources() → [{ id, label, kind }], stats() → laufende Quellen mit Bewegung (0–100) und
+      // Größe, onStats(callback), snapshot(src) → JPEG (Buffer) der laufenden Quelle (leer = erste Kamera)
+      video: this.liveVideo && {
+        sources: () => this.liveVideo.list(),
+        stats: () => this.liveVideo.statsList(),
+        onStats: (callback) => {
+          this.liveVideo.on('stats', callback);
+          entry.cleanups.push(() => this.liveVideo.off('stats', callback));
+        },
+        snapshot: (src) => this.liveVideo.snapshot(src),
       },
       // Vorlesen: speak(text, { voice, rate, volume }) → Adresse einer WAV-Datei für Ton-Ebenen im Overlay
       // (/files/<id>/tts-….wav); voices() → installierte Stimmen. Es bleiben die letzten 20 Dateien.

@@ -417,7 +417,8 @@ const PLATFORM_TEXT = {
 function renderPlatforms() {
   const list = state.platforms || {};
   const paired = Boolean(state.account?.paired);
-  $('platformPanels').replaceChildren(...Object.entries(list).map(([id, p]) => {
+  // Erst zeigen, wenn der Ventoview-Server die Plattform anbietet (oder sie schon verbunden ist)
+  $('platformPanels').replaceChildren(...Object.entries(list).filter(([, p]) => p.available === true || p.status !== 'off').map(([id, p]) => {
     const texts = PLATFORM_TEXT[id] || {};
     let line;
     if (p.status === 'pending') line = texts.pending(p);
