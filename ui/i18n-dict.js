@@ -18,6 +18,7 @@ VVI18n.add({
   'Konto verbinden': ['Connect account', 'Collega account', 'Conectar cuenta', 'Connecter le compte'],
   'Erweiterung einrichten': ['Set up extension', 'Configura estensione', 'Configurar extensión', 'Configurer l’extension'],
   'Overlay einrichten': ['Set up overlay', 'Configura overlay', 'Configurar overlay', 'Configurer l’overlay'],
+  'Modul öffnen': ['Open module', 'Apri modulo', 'Abrir módulo', 'Ouvrir le module'],
   'Lädt …': ['Loading …', 'Caricamento …', 'Cargando …', 'Chargement …'],
   'Modul ist aus – einschalten': ['Module is off – turn on', 'Modulo spento – attiva', 'Módulo apagado – activar', 'Module désactivé – activer'],
   'Modul ist an – ausschalten': ['Module is on – turn off', 'Modulo acceso – disattiva', 'Módulo encendido – desactivar', 'Module activé – désactiver'],

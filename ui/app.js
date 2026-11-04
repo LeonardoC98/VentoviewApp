@@ -152,7 +152,7 @@ function installedCard(mod) {
         ? h('button', { class: 'btn primary', type: 'button', onclick: () => run('openAccount') }, state.account?.connected ? 'Freischalten' : 'Konto verbinden')
         : mod.needsExtension && !mod.inactive
           ? h('button', { class: 'btn primary', type: 'button', onclick: () => openExtensionWizard(mod) }, 'Erweiterung einrichten')
-          : h('button', { class: 'btn primary', type: 'button', disabled: mod.inactive, onclick: () => run('openModule', mod.id) }, 'Overlay einrichten'),
+          : h('button', { class: 'btn primary', type: 'button', disabled: mod.inactive, onclick: () => run('openModule', mod.id) }, 'Modul öffnen'),
       mod.update && h('button', {
         class: 'btn', type: 'button', disabled: mod.busy, onclick: () => run('install', mod.id),
       }, mod.busy ? 'Lädt …' : 'Aktualisieren'),
