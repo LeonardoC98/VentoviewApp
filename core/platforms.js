@@ -420,11 +420,16 @@ class Platforms extends EventEmitter {
   async youtubeChat(chatId, signal) {
     const since = Date.now() - 5000;
     const state = { pageToken: '', ended: false };
+    const seen = new Set(); // nach einem neuen Abruf kann YouTube Zeilen doppelt schicken
     const handle = (response) => {
       if (response.nextPageToken) state.pageToken = response.nextPageToken;
       if (response.offlineAt) state.ended = true;
       for (const item of response.items || []) {
-        if (Date.parse(item.snippet?.publishedAt || '') < since) continue;
+        if (Date.parse(item.snippet?.publishedAt || '') < since || (item.id && seen.has(item.id))) continue;
+        if (item.id) {
+          seen.add(item.id);
+          if (seen.size > 2000) seen.delete(seen.values().next().value);
+        }
         if (this.youtubeItem(item) === 'end') state.ended = true;
       }
     };
