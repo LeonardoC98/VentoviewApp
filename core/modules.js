@@ -27,8 +27,9 @@ class ModuleManager extends EventEmitter {
     return true;
   }
 
-  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, platforms, liveVideo, speech }) {
+  constructor({ dir, dataDir, siteUrl, bridge, appVersion, account, twitch, config, extensions, keys, systemLocale, connections, platforms, liveVideo, speech, riot }) {
     super();
+    this.riot = riot;               // Riot-Daten über den Ventoview-Server (League, TFT, VALORANT)
     this.liveVideo = liveVideo;     // Live-Video (Kameras, Bildschirme, Fenster) – Statistik und Fotos
     this.connections = connections; // Spenden-Dienste (StreamElements, Streamlabs, Tipeeestream)
     this.platforms = platforms;     // YouTube und Kick (Chat, Ereignisse, schreiben)
@@ -203,6 +204,16 @@ class ModuleManager extends EventEmitter {
           entry.cleanups.push(() => this.platforms.off('change', callback));
         },
         send: (text, opts) => this.platforms.send(text, opts),
+      },
+      // Riot-Daten über den Ventoview-Server – der Schlüssel liegt nur dort. info() → { api, rso }, post(pfad, daten)
+      // für League und TFT (Riot-ID reicht), login() / logout() / connected / valPlayer() für VALORANT (Riot Sign On)
+      riot: this.riot && {
+        info: () => this.riot.info(),
+        post: (pathname, body) => this.riot.post(pathname, body),
+        get connected() { return manager.riot.connected; },
+        login: () => this.riot.login(),
+        logout: () => this.riot.logout(),
+        valPlayer: (body) => this.riot.valPlayer(body),
       },
       // Live-Video der App: sources() → [{ id, label, kind }], stats() → laufende Quellen mit Bewegung (0–100) und
       // Größe, onStats(callback), snapshot(src) → JPEG (Buffer) der laufenden Quelle (leer = erste Kamera)

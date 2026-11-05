@@ -26,6 +26,7 @@ const t = (text, ...args) => tr(locale(), text, ...args);
 const { TwitchAuth } = require('./core/twitch');
 const { Connections } = require('./core/connections');
 const { Platforms } = require('./core/platforms');
+const { Riot } = require('./core/riot');
 const { Speech } = require('./core/speech');
 const { Updater } = require('./core/updater');
 
@@ -44,6 +45,7 @@ let sharing;
 let updater;
 let connections;
 let platforms;
+let riot;
 let keywordSources;
 let references;
 let liveAudio;
@@ -168,6 +170,7 @@ async function init() {
   // YouTube und Kick: Anmeldung über den Ventoview-Server, Chat und Ereignisse einheitlich für die Module
   platforms = new Platforms({ config, safeStorage, openExternal: (url) => shell.openExternal(url), siteUrl: () => config.get('siteUrl'), account });
   platforms.on('change', pushState);
+  riot = new Riot({ config, safeStorage, openExternal: (url) => shell.openExternal(url), siteUrl: () => config.get('siteUrl'), account });
   bridge.handle('license.state', () => account.state());
   bridge.handle('license.set', (msg) => account.set(msg));
   bridge.handle('license.refresh', () => account.refresh());
@@ -198,6 +201,7 @@ async function init() {
     systemLocale: () => app.getLocale(),
     connections,
     platforms,
+    riot,
     liveVideo,
     speech: new Speech(),
   });
